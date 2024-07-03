@@ -82,18 +82,19 @@ Se consume la API REST de Google Firebase desde el microcontrolador ESP32 para e
 
 * Este README.md proporciona una descripción general del proyecto.
 * Los archivos de código fuente contienen comentarios detallados en español.
-* La documentación adicional se encuentra en la carpeta `assets`.
+* La documentación adicional se encuentra en la carpeta `assets`. (Tambien se puede acceder al video con la calidad original).
 
 
 ## Assets:
 ### Esquema del circuito:
-* https://raw.githubusercontent.com/nicolasottone/rack-controller-firmware/b329324d0685aa1b6786c797dfeb4796b47f2a84/assets/schm_page-0001.jpg
+* ![schm_page-0001](https://raw.githubusercontent.com/nicolasottone/rack-controller-firmware/b329324d0685aa1b6786c797dfeb4796b47f2a84/assets/schm_page-0001.jpg)
 
 ### Imagenes del case:
-* https://raw.githubusercontent.com/nicolasottone/rack-controller-firmware/b329324d0685aa1b6786c797dfeb4796b47f2a84/assets/base%20case_page-0001.jpg
-* https://raw.githubusercontent.com/nicolasottone/rack-controller-firmware/b329324d0685aa1b6786c797dfeb4796b47f2a84/assets/cover%20case_page-0001.jpg
-* https://raw.githubusercontent.com/nicolasottone/rack-controller-firmware/b329324d0685aa1b6786c797dfeb4796b47f2a84/assets/full%20case%20view_page-0001.jpg
+* ![base case view_page-0001](https://raw.githubusercontent.com/nicolasottone/rack-controller-firmware/b329324d0685aa1b6786c797dfeb4796b47f2a84/assets/base%20case_page-0001.jpg)
+* ![cover case_page-0001](https://raw.githubusercontent.com/nicolasottone/rack-controller-firmware/b329324d0685aa1b6786c797dfeb4796b47f2a84/assets/cover%20case_page-0001.jpg)
+* ![full case view_page-0001](https://raw.githubusercontent.com/nicolasottone/rack-controller-firmware/b329324d0685aa1b6786c797dfeb4796b47f2a84/assets/full%20case%20view_page-0001.jpg)
 
 ### Board:
-* https://raw.githubusercontent.com/nicolasottone/rack-controller-firmware/b329324d0685aa1b6786c797dfeb4796b47f2a84/assets/pcb_page-0001.jpg
-* https://raw.githubusercontent.com/nicolasottone/rack-controller-firmware/b329324d0685aa1b6786c797dfeb4796b47f2a84/assets/board%20layout_page-0001.jpg
+* ![pcb_page-0001](https://raw.githubusercontent.com/nicolasottone/rack-controller-firmware/b329324d0685aa1b6786c797dfeb4796b47f2a84/assets/pcb_page-0001.jpg)
+* ![board layout_page-0001](https://raw.githubusercontent.com/nicolasottone/rack-controller-firmware/b329324d0685aa1b6786c797dfeb4796b47f2a84/assets/board%20layout_page-0001.jpg)
+
