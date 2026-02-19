@@ -105,7 +105,6 @@ void printErrors() {
   } else {
     printIsOK();
   }
-  return;
 }
 
 void displayInit() {

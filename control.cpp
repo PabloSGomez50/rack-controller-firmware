@@ -1,12 +1,21 @@
 #include <Arduino.h>
 #include "global_variables.h"
 #include "driver/gpio.h"
+#include "driver/ledc.h"
 
 volatile unsigned long t1[3] = { 0, 0, 0 };
 volatile unsigned long t0[3] = { 0, 0, 0 };
 volatile unsigned long deltaT[3] = { 0, 0, 0 };
 double frecuencia[3] = { 0, 0, 0 };
 const int FAN_METER[3] = { FAN1_METER, FAN2_METER, FAN3_METER };  // Pines de los medidores de los ventiladores
+
+
+const int frequency = 1000;  // Hz
+const int FAN_PIN[3] = { FAN1, FAN2, FAN3 };  // Pines de los ventiladores
+const ledc_mode_t speed_mode = LEDC_HIGH_SPEED_MODE;
+const ledc_timer_t timer = LEDC_TIMER_0;
+const ledc_channel_t channels[3] = { LEDC_CHANNEL_1, LEDC_CHANNEL_2, LEDC_CHANNEL_3 };
+const ledc_timer_bit_t duty_resolution = LEDC_TIMER_8_BIT;
 
 void periodo() {
   for (int i = 0; i < 3; i++) {
@@ -39,18 +48,30 @@ void setupPinsMode(void) {
   attachInterrupt(digitalPinToInterrupt(FAN3_METER), periodo, FALLING);
 }
 
-const int frequency = 1000;  // Hz
-const int resolution = 8;    // bits
-
 void fansInit() {
+  // configure timer
+  ledc_timer_config_t ledc_timer = {
+    .speed_mode = speed_mode,
+    .duty_resolution = duty_resolution,
+    .timer_num = timer,
+    .freq_hz = frequency,
+    .clk_cfg = LEDC_AUTO_CLK
+  };
+  ledc_timer_config(&ledc_timer);
 
-  ledcSetup(1, frequency, resolution);
-  ledcSetup(2, frequency, resolution);
-  ledcSetup(3, frequency, resolution);
-
-  ledcAttachPin(FAN1, 1);
-  ledcAttachPin(FAN2, 2);
-  ledcAttachPin(FAN3, 3);
+  // configure channels and attach GPIOs
+  for (int i = 0; i < 3; ++i) {
+    ledc_channel_config_t ledc_channel = {
+      .gpio_num = FAN_PIN[i],
+      .speed_mode = speed_mode, 
+      .channel = channels[i],
+      .intr_type = LEDC_INTR_DISABLE,
+      .timer_sel = timer,
+      .duty = 0,
+      .hpoint = 0
+    };
+    ledc_channel_config(&ledc_channel);
+  }
 }
 
 double getFanSpeed(int fan) {
@@ -135,7 +156,8 @@ void setFanSpeed(float fan_speed, int fan) {
   if (fan_speed <= 0.9) {
     fan_speed = int((1 - fan_speed) * 255);
   } else fan_speed = 0;
-  ledcWrite(fan, fan_speed);
+  ledc_set_duty(speed_mode, channels[fan - 1], fan_speed);
+  ledc_update_duty(speed_mode, channels[fan - 1]);
 }
 
 //se modifico de modo que invierta el comportamiento por el transistor npn que alterna la señal
@@ -143,9 +165,10 @@ void setAllFanSpeed(float fan_speed) {
   if (fan_speed <= 0.9) {
     fan_speed = int((1 - fan_speed) * 255);
   } else fan_speed = 0;
-  ledcWrite(1, fan_speed);
-  ledcWrite(2, fan_speed);
-  ledcWrite(3, fan_speed);
+  for (int i = 0; i < 3; i++) {
+    ledc_set_duty(speed_mode, channels[i], fan_speed);
+    ledc_update_duty(speed_mode, channels[i]);
+  }
   return;
 }
 

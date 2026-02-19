@@ -20,7 +20,7 @@ float get_temp(void) {
   if (adc < 745) {            // Vmin = 0,6V (745)
     return 0;
   }
-  return (float(adc) - 1341) / 29.77;
+  return float(adc - 1341) / 29.77;
 }
 
 //Devuelve la humedad ambiente en Rh%, devuelve cero si no es correcta
@@ -57,18 +57,12 @@ float get_temp_tmr() {
   float rth = 6800 / (3.3 / v - 1);
   float logR = log(rth);
   float kelvin = 1.0 / (a + b * logR + c * logR * logR * logR);
-  float celsius = kelvin - 273.15;
-  return celsius;
+  return kelvin - 273.15;
 }
 
 bool isDoorOpen() {
-  if (digitalRead(SWITCH_PIN)) {
-    open_door_flag = 1;  //Recordar que el switch es de la caja, por lo tanto 0 = puerta cerrada
-    return 1;
-  } else {
-    open_door_flag = 0;
-    return 0;
-  }
+  open_door_flag = digitalRead(SWITCH_PIN);  //Recordar que el switch es de la caja, por lo tanto 0 = puerta cerrada
+  return open_door_flag;
 }
 
 
@@ -97,11 +91,7 @@ bool check_hum() {
 }
 
 bool check_smk_sensor() {
-  if (!digitalRead(SMK_PIN)) {
-    smoke_flag = 1;
-    return 1;
-  } else {
-    smoke_flag = 0;
-    return 0;
-  }
+  // Pull up en el optoacoplador, por lo tanto 0 = humo detectado
+  smoke_flag = !digitalRead(SMK_PIN);
+  return smoke_flag;
 }
