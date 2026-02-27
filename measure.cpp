@@ -12,10 +12,10 @@ void setDefaultConfig() {
 // X = 29,77(°C)+1341 Ec ADC(°C) con RS=150
 float get_temp(void) {
   int adc = 0;
-  for (int i = 0; i < 1000; i++) {
+  for (int i = 0; i < ADC_SAMPLES; i++) {
     adc += analogRead(TEMP_PIN);
   }
-  adc = adc / 1000;
+  adc = adc / ADC_SAMPLES;
   adc = adc * 0.98 + 191.49;  //ajuste
   if (adc < 745) {            // Vmin = 0,6V (745)
     return 0;
@@ -27,10 +27,10 @@ float get_temp(void) {
 // X = 29,77(%rH)+745 Ec ADC(°C) con RS=150
 float get_hum(void) {
   int adc = 0;
-  for (int i = 0; i < 1000; i++) {
+  for (int i = 0; i < ADC_SAMPLES; i++) {
     adc += analogRead(HUM_PIN);
   }
-  adc = adc / 1000;
+  adc = adc / ADC_SAMPLES;
   adc = adc * 0.98 + 191.49;  //ajuste
   if (adc < 745) {            // Vmin = 0,6V (745)
     return 0;
@@ -45,16 +45,16 @@ float get_temp_tmr() {
   const float b = 1.17387916e-4;
   const float c = 7.196207e-7;
   float adc = 0;
-  for (int i = 0; i < 1000; i++) {
+  for (int i = 0; i < ADC_SAMPLES; i++) {
     adc += analogRead(TMR_PIN);
   }
-  adc = adc / 1000;
+  adc = adc / ADC_SAMPLES;
   adc = adc * 0.98 + 191.49;  //ajuste
   if (adc > 3800 || adc < 620) {
     return 0;
   }
   float v = 3.3 * adc / 4096;
-  float rth = 6800 / (3.3 / v - 1);
+  float rth = R_PULL_UP_SONDA / (3.3 / v - 1);
   float logR = log(rth);
   float kelvin = 1.0 / (a + b * logR + c * logR * logR * logR);
   return kelvin - 273.15;

@@ -3,6 +3,10 @@
 
 //Defino el id del usuario (reemplazar por original)
 #define USER "USER_ID"
+#define RTOS_MINIMAL_STACKSIZE 256
+#define ADC_SAMPLES 1000
+
+#define R_PULL_UP_SONDA 6800
 
 //SIGNAL PINS
 #define TMR_PIN GPIO_NUM_34      //PIN: Termistor
@@ -54,7 +58,7 @@ extern bool smoke_flag;
 //true if door is open
 extern bool open_door_flag;
 //true if door was opened
-extern bool door_was_opened;
+extern bool is_door_open;
 //true if connected
 extern bool connected;
 //true if eth wire not connect

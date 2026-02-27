@@ -6,7 +6,7 @@
 LiquidCrystal_I2C lcd(0x27, 16, 2);  // set the LCD address to 0x27 for a 16 chars and 2 line display
 
 void initDisplayCommunication() {
-  Wire.begin(GPIO_NUM_21, GPIO_NUM_17, 10000);  //I2C Communication begins - Seteo el clock de la comunicacion a 10KHz para evitar errores
+  Wire.begin(GPIO_NUM_21, GPIO_NUM_17, 100000);  //I2C Communication begins - Seteo el clock de la comunicacion a 10KHz para evitar errores
 }
 
 void printMeasures() {
@@ -52,9 +52,10 @@ void printFanStatus() {
 
 void printRedStatus() {
   lcd.setCursor(0, 0);
-  if (connected) {
-    lcd.print("CONECTADO       ");
-  } else lcd.print("DESCONECTADO    ");
+  if (connected)
+    lcd.print("RED:CONECTADO  ");
+  else
+    lcd.print("RED:DESCONECTADO");
 }
 
 void printIsOK() {
