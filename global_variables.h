@@ -1,6 +1,8 @@
 #ifndef GLOBAL_VARIABLES_H
 #define GLOBAL_VARIABLES_H
 
+#include <Arduino.h>
+
 //Defino el id del usuario (reemplazar por original)
 #define USER "USER_ID"
 #define RTOS_MINIMAL_STACKSIZE 256
@@ -24,6 +26,14 @@
 #define FAN3_METER GPIO_NUM_15
 #define BUZZER GPIO_NUM_26
 #define RELE_PIN GPIO_NUM_14
+
+#define FAN_PERIOD 500
+#define FAN_PULSES 2
+
+extern TaskHandle_t handle_display_task;
+extern TaskHandle_t handle_server_com;      // Inicializo la tarea
+extern SemaphoreHandle_t sem_global_vars;  // Inicializo los semáforos
+
 
 //variables que almacenan las medidas de la temperatura
 extern float temp, temp_tmr, temp_copy, temp_tmr_copy;
@@ -55,8 +65,6 @@ extern bool crit_rh_flag;
 extern bool crit_temp_tmr_flag;
 //true if there is smoke
 extern bool smoke_flag;
-//true if door is open
-extern bool open_door_flag;
 //true if door was opened
 extern bool is_door_open;
 //true if connected

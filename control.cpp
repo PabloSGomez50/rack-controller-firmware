@@ -3,30 +3,40 @@
 #include "driver/gpio.h"
 #include "driver/ledc.h"
 
-volatile unsigned long t1[3] = { 0, 0, 0 };
-volatile unsigned long t0[3] = { 0, 0, 0 };
-volatile unsigned long deltaT[3] = { 0, 0, 0 };
-double frecuencia[3] = { 0, 0, 0 };
 const int FAN_METER[3] = { FAN1_METER, FAN2_METER, FAN3_METER };  // Pines de los medidores de los ventiladores
 
+// Contadores de pulsos (incrementados en ISR)
+volatile uint32_t pulseCounter[3] = {0, 0, 0};
+uint32_t rpm[3] = {0, 0, 0};
 
-const int frequency = 1000;  // Hz
+// Mutex o Spinlock para proteger la lectura de los contadores
+portMUX_TYPE mux = portMUX_INITIALIZER_UNLOCKED;
+
+// ISRs ultra-livianas
+void IRAM_ATTR isrFan1() { portENTER_CRITICAL_ISR(&mux); pulseCounter[0]++; portEXIT_CRITICAL_ISR(&mux); }
+void IRAM_ATTR isrFan2() { portENTER_CRITICAL_ISR(&mux); pulseCounter[1]++; portEXIT_CRITICAL_ISR(&mux); }
+void IRAM_ATTR isrFan3() { portENTER_CRITICAL_ISR(&mux); pulseCounter[2]++; portEXIT_CRITICAL_ISR(&mux); }
+
+void IRAM_ATTR doorInterrupt() {
+  if (handle_display_task == nullptr) {
+    return;
+  }
+  static volatile TickType_t last_tick = 0;
+  TickType_t now = xTaskGetTickCountFromISR();
+  if ((now - last_tick) < pdMS_TO_TICKS(20)) return; // short debounce to avoid floods
+  last_tick = now;
+  
+  BaseType_t hpTaskWoken = pdFALSE;
+  vTaskNotifyGiveFromISR(handle_display_task, &hpTaskWoken);
+  portYIELD_FROM_ISR(hpTaskWoken);
+}
+
+const int frequency = 10000;  // Hz
 const int FAN_PIN[3] = { FAN1, FAN2, FAN3 };  // Pines de los ventiladores
 const ledc_mode_t speed_mode = LEDC_HIGH_SPEED_MODE;
 const ledc_timer_t timer = LEDC_TIMER_0;
 const ledc_channel_t channels[3] = { LEDC_CHANNEL_1, LEDC_CHANNEL_2, LEDC_CHANNEL_3 };
 const ledc_timer_bit_t duty_resolution = LEDC_TIMER_8_BIT;
-
-void periodo() {
-  for (int i = 0; i < 3; i++) {
-    if (digitalRead(FAN_METER[i]) == 0) {
-      t1[i] = micros();
-      deltaT[i] = t1[i] - t0[i];
-      t0[i] = t1[i];
-      frecuencia[i] = 1000000.0 / deltaT[i];  // Se multiplica por 1 millón para obtener frecuencia en Hz
-    }
-  }
-}
 
 void setupPinsMode(void) {
   pinMode(TEMP_PIN, INPUT);
@@ -43,9 +53,10 @@ void setupPinsMode(void) {
   pinMode(BUZZER, OUTPUT);
   pinMode(RELE_PIN, OUTPUT);
 
-  attachInterrupt(digitalPinToInterrupt(FAN1_METER), periodo, FALLING);
-  attachInterrupt(digitalPinToInterrupt(FAN2_METER), periodo, FALLING);
-  attachInterrupt(digitalPinToInterrupt(FAN3_METER), periodo, FALLING);
+  attachInterrupt(digitalPinToInterrupt(FAN1_METER), isrFan1, FALLING);
+  attachInterrupt(digitalPinToInterrupt(FAN2_METER), isrFan2, FALLING);
+  attachInterrupt(digitalPinToInterrupt(FAN3_METER), isrFan3, FALLING);
+  attachInterrupt(digitalPinToInterrupt(SWITCH_PIN), doorInterrupt, FALLING);
 }
 
 void fansInit() {
@@ -74,35 +85,12 @@ void fansInit() {
   }
 }
 
-double getFanSpeed(int fan) {
+uint32_t getFanSpeed(int fan) {
   noInterrupts();
-  double freq = frecuencia[fan - 1];
-  frecuencia[fan - 1] = 0;
+  rpm[fan - 1] = (pulseCounter[fan - 1] * 60000) / (FAN_PERIOD * FAN_PULSES); // Convertir a RPM
+  pulseCounter[fan - 1] = 0; // Reiniciar el contador para la próxima medición
   interrupts();
-  return freq;
-}
-
-void buzzerOn() {
-  if (buzzer) {
-    if (!beep) {
-      digitalWrite(BUZZER, 1);
-      beep = true;
-    } else {
-      digitalWrite(BUZZER, 0);
-      beep = false;
-    }
-    return;
-  } else {
-    digitalWrite(BUZZER, 0);
-    beep = false;
-  }
-  return;
-}
-
-void buzzerOff() {
-  digitalWrite(BUZZER, 0);
-  beep = false;
-  return;
+  return rpm[fan - 1];
 }
 
 float getDynamicSpeed(int hum, float temp, float temp_tmr) {
@@ -188,12 +176,4 @@ void checkFans(float fans_speed) {
     } else fan3_on = true;
   }
   return;
-}
-
-void turn_on_rele() {
-  digitalWrite(RELE_PIN, 1);
-}
-
-void turn_off_rele() {
-  digitalWrite(RELE_PIN, 0);
 }

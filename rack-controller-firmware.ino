@@ -7,6 +7,7 @@
 #include "control.h"
 #include "measure.h"
 
+TaskHandle_t handle_display_task;
 TaskHandle_t handle_server_com;      // Inicializo la tarea
 SemaphoreHandle_t sem_global_vars;  // Inicializo los semáforos
 
@@ -29,12 +30,14 @@ void setup() {
 
   // no hago nada si hay error de hardware
   if (hardwareCheck() == 0) {
+    Serial.println("No se encontró el modulo Ethernet.");
     xSemaphoreTake(sem_global_vars, portMAX_DELAY);
     module_error = true;
     xSemaphoreGive(sem_global_vars);
     vTaskDelay(5000 / portTICK_PERIOD_MS);
   }
   if (wireIsConnected() == 0) {
+    Serial.println("El cable Ethernet no está conectado. Conectalo por favor");
     xSemaphoreTake(sem_global_vars, portMAX_DELAY);
     wire_error = true;
     xSemaphoreGive(sem_global_vars);
@@ -44,16 +47,43 @@ void setup() {
   xTaskCreatePinnedToCore(
     task_server_com,
     "task_server_com",
-    RTOS_MINIMAL_STACKSIZE * 8,
+    RTOS_MINIMAL_STACKSIZE * 32,
     NULL,
     0,
     &handle_server_com,
     0 // Core ID
   );
   xTaskCreatePinnedToCore(
+    task_maintain_connection,
+    "task_maintain_connection",
+    RTOS_MINIMAL_STACKSIZE * 8,
+    NULL,
+    0,
+    NULL,
+    0 // Core ID
+  );
+  xTaskCreatePinnedToCore(
+    task_control_fans,
+    "task_control_fans",
+    RTOS_MINIMAL_STACKSIZE * 8,
+    NULL,
+    0,
+    NULL,
+    1 // Core ID
+  );
+  xTaskCreatePinnedToCore(
+    task_display,
+    "task_display",
+    RTOS_MINIMAL_STACKSIZE * 8,
+    NULL,
+    0,
+    &handle_display_task,
+    1 // Core ID
+  );
+  xTaskCreatePinnedToCore(
     task_get_measures,
     "task_get_measures",
-    RTOS_MINIMAL_STACKSIZE * 8,
+    RTOS_MINIMAL_STACKSIZE * 16,
     NULL,
     0,
     NULL,
@@ -74,7 +104,7 @@ void task_control_fans(void *parameter) {
       speed = (is_automatic_speed) ? getDynamicSpeed(hum, temp, temp_tmr) : manual_speed;
       setAllFanSpeed(speed);
       // xSemaphoreGive(sem_global_vars);
-      vTaskDelay(1000 / portTICK_PERIOD_MS);
+      vTaskDelay(FAN_PERIOD / portTICK_PERIOD_MS);
   }
 }
 
@@ -82,12 +112,10 @@ void task_display(void *parameter) {
   displayInit();
   uint8_t display_seq = 0;
   while (true) {
-    if (isDoorOpen()) {
-      if (!is_door_open) {
-        displayOn();
-        is_door_open = true;
-        // vTaskDelay(10 / portTICK_PERIOD_MS);
-      }
+
+    displayOn();
+    is_door_open = true;
+    while (digitalRead(SWITCH_PIN)) {
       switch (display_seq) {
         case 0:
           printErrors(); // Fila 0
@@ -100,10 +128,12 @@ void task_display(void *parameter) {
       }
       display_seq = (display_seq + 1) % 2;
       vTaskDelay(1000 / portTICK_PERIOD_MS);
-    } else {
-      displayOff();
     }
-    vTaskDelay(250 / portTICK_PERIOD_MS);
+    
+    displayOff();
+    is_door_open = false;
+    ulTaskNotifyTake(pdTRUE, portMAX_DELAY);   // wait for door event
+    vTaskDelay(pdMS_TO_TICKS(50));
   }
 }
 
@@ -149,7 +179,7 @@ void task_server_com(void *parameter) {
         isGet = true;
         xSemaphoreTake(sem_global_vars, portMAX_DELAY);
         connected = true;
-        // wire_error = false;
+        wire_error = false;
         xSemaphoreGive(sem_global_vars);
         strikeCount = 0;
       } else {
@@ -180,8 +210,7 @@ void task_server_com(void *parameter) {
           downloadData(data_in);
           uploadDataToString();
           
-          (rele) ? turn_on_rele() : turn_off_rele();
-          is_door_open = false;
+          (rele) ? digitalWrite(RELE_PIN, 1) : digitalWrite(RELE_PIN, 0);
           xSemaphoreGive(sem_global_vars);
           
           chainRequest = true;
@@ -212,12 +241,13 @@ void task_maintain_connection(void *parameter) {
   bool is_connected = false;
   while (true) {
     connectionMantain();
-    if (!wireIsConnected()) {
+    if (!isWifiConnected() && !wireIsConnected()) {
       xSemaphoreTake(sem_global_vars, portMAX_DELAY);
       connected = false;
       wire_error = true;
       xSemaphoreGive(sem_global_vars);
-      vTaskSuspend(handle_server_com);
+      if (handle_server_com != NULL)
+        vTaskSuspend(handle_server_com);
       is_connected = false;
     } else {
       if (!is_connected) {
@@ -225,10 +255,11 @@ void task_maintain_connection(void *parameter) {
         connected = true;
         wire_error = false;
         xSemaphoreGive(sem_global_vars);
-        vTaskResume(handle_server_com);
+        if (handle_server_com != NULL)
+          vTaskResume(handle_server_com);
         is_connected = true;
       }
     }
-    vTaskDelay(150 / portTICK_PERIOD_MS);
+    vTaskDelay(200 / portTICK_PERIOD_MS);
   }
 }

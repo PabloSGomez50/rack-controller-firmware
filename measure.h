@@ -13,9 +13,6 @@ float get_hum(void);
 //Debe estar conectado con una RPULLUP de 6k8
 float get_temp_tmr();
 
-//Actualiza flag y devuelve 1 si la puerta esta abierta
-bool isDoorOpen();
-
 //Comprueba si alguna temperatura supero los limites y controla las flags, devuelve 1 si se supero y 0 si no
 bool check_temp();
 

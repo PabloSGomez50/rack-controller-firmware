@@ -8,7 +8,6 @@ bool crit_temp_flag = false;
 bool crit_temp_tmr_flag = false;
 bool crit_rh_flag = false;
 bool smoke_flag = false;
-bool open_door_flag = false;
 bool is_door_open = false;
 bool connected = false;
 bool wire_error = false;

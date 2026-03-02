@@ -16,19 +16,7 @@ void setFanSpeed(float speed, int fan);
 void setAllFanSpeed(float speed);
 
 //Devuelve la velocidad del ventilador en Hertz 
-double getFanSpeed(int fan);
+uint32_t getFanSpeed(int fan);
 
 //Comprueba funcionamiento fans, controla flags
 void checkFans(float fans_speed);
-
-//Enciende el buzzer de forma intermitente
-void buzzerOn();
-
-//Apaga el buzzer
-void buzzerOff();
-
-//Apaga el rele
-void turn_off_rele();
-
-//Enciende el rele
-void turn_on_rele();

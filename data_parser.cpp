@@ -63,7 +63,7 @@ bool uploadDataToString(){
   json.set("UsersData/" + String(USER) + "/crit_temp", crit_temp_flag);
   json.set("UsersData/" + String(USER) + "/crit_temp_tmr", crit_temp_tmr_flag);
   json.set("UsersData/" + String(USER) + "/smoke_alarm", smoke_flag);
-  json.set("UsersData/" + String(USER) + "/door_status", door_was_opened);
+  json.set("UsersData/" + String(USER) + "/door_status", is_door_open);
   json.set("UsersData/" + String(USER) + "/fan_status_1", fan1_on);
   json.set("UsersData/" + String(USER) + "/fan_status_2", fan2_on);
   json.set("UsersData/" + String(USER) + "/fan_status_3", fan3_on);

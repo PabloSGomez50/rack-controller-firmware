@@ -60,11 +60,6 @@ float get_temp_tmr() {
   return kelvin - 273.15;
 }
 
-bool isDoorOpen() {
-  open_door_flag = digitalRead(SWITCH_PIN);  //Recordar que el switch es de la caja, por lo tanto 0 = puerta cerrada
-  return open_door_flag;
-}
-
 
 bool check_temp() {
   if (temp_tmr >= crit_temp_tmr) {
