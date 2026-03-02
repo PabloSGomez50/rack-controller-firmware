@@ -10,6 +10,8 @@ bool hardwareCheck(void);
 //Comprueba si esta el cable conectado
 bool wireIsConnected(void);
 
+bool isWifiConnected(void);
+
 //Inicia el protocolo DHCP, intenta 3 veces
 bool dhcpInit(void);
 

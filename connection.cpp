@@ -1,7 +1,6 @@
 #include "driver/gpio.h"
 #include <SPI.h>
-// #include <EthernetENC.h>
-#include <EthernetESP32.h>
+#include <EthernetENC.h>
 #include <SSLClient.h>
 #include "trust_anchors.h"
 #include <FirebaseJson.h>
@@ -33,7 +32,6 @@ IPAddress myDns(8, 8, 8, 8);
 
 // Inicializo cliente Ethernet
 EthernetClient ethClient;
-ENC28J60Driver driver(ETH_CS_PIN);
 // SSL wrapper over Ethernet
 SSLClient sslEthClient(ethClient, TAs, (size_t)TAs_NUM, GPIO_NUM_34);
 
@@ -46,15 +44,14 @@ FirebaseJson data_in;
 
 void ethernetSetup(){
   // SCK=18, MISO=19, MOSI=23, CS=5
-  // SPI.begin(ETH_CLK_PIN, ETH_MISO_PIN, ETH_MOSI_PIN, ETH_CS_PIN);
+  SPI.begin(ETH_CLK_PIN, ETH_MISO_PIN, ETH_MOSI_PIN, ETH_CS_PIN);
   // delay(10);
-  // Ethernet.init(ETH_CS_PIN); // CS pin
-  
-  Ethernet.init(driver);
+  Ethernet.init(ETH_CS_PIN); // CS pin
 }
 
 // Comprueba si hay hardware Ethernet presente
 bool hardwareCheck() {
+  return Ethernet.hardwareStatus() != EthernetNoHardware;
   if (Ethernet.hardwareStatus() == EthernetNoHardware) {
     Serial.println("No se encontró el modulo Ethernet.");
     return false;
@@ -63,12 +60,13 @@ bool hardwareCheck() {
 }
 
 bool wireIsConnected() {
-  if (Ethernet.linkStatus() == LinkOFF) {
-    Serial.println("El cable Ethernet no está conectado. Conectalo por favor");
-    return 0;
+  return Ethernet.linkStatus() == LinkON;
+  if (Ethernet.linkStatus() == LinkON) {
+    Serial.println("Cable Ethernet conectado.");
+    return 1;
   }
-  Serial.println("Cable Ethernet conectado.");
-  return 1;
+  Serial.println("El cable Ethernet no está conectado. Conectalo por favor");
+  return 0;
 }
 
 bool wifiConnect(const char* ssid = WIFI_SSID, const char* pass = WIFI_PASS, unsigned long timeoutMs = 15000) {
@@ -92,7 +90,7 @@ bool wifiConnect(const char* ssid = WIFI_SSID, const char* pass = WIFI_PASS, uns
 }
 
 bool dhcpInit() {
-  if (Ethernet.hardwareStatus() != EthernetNoHardware && Ethernet.linkStatus() != LinkOFF) {
+  if (Ethernet.hardwareStatus() != EthernetNoHardware && Ethernet.linkStatus() == LinkON) {
     Serial.println("Initialize Ethernet with DHCP:");
     for (int i = 0; i < 3; i++) {
       if (Ethernet.begin(mac) != 0) {
@@ -129,6 +127,10 @@ bool dhcpInit() {
   // si no, pruebo WiFi fallback
   return useWiFi;
 
+}
+
+bool isWifiConnected() {
+  return useWiFi;
 }
 
 void connectionMantain(){
