@@ -1,5 +1,5 @@
 //Json recibido
-extern FirebaseJson data_in;
+// extern FirebaseJson data_in;
 
 //Set CS pin to GPIO_5
 void ethernetSetup(void);
@@ -25,7 +25,7 @@ void handleServerResponse(void);
 bool httpsGET(void);
 
 //Hace una peticion https PUT al server, devuelve true si fue exitosa
-bool httpsPUT(String);
+// bool httpsPUT(String);
 
 //wrapper de client.stop()
 void clientStop(void);
@@ -35,3 +35,7 @@ int isClientAvailable(void);
 
 //wrapper de client.connected()
 bool isClientConnected(void);
+
+void send_sensor_data(sensor_data_t data);
+
+void load_data_from_server(void);

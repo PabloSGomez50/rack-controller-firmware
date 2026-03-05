@@ -150,9 +150,11 @@ void setFanSpeed(float fan_speed, int fan) {
 
 //se modifico de modo que invierta el comportamiento por el transistor npn que alterna la señal
 void setAllFanSpeed(float fan_speed) {
-  if (fan_speed <= 0.9) {
+  if (fan_speed <= 0.9)
     fan_speed = int((1 - fan_speed) * 255);
-  } else fan_speed = 0;
+  else
+    fan_speed = 0;
+
   for (int i = 0; i < 3; i++) {
     ledc_set_duty(speed_mode, channels[i], fan_speed);
     ledc_update_duty(speed_mode, channels[i]);

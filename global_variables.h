@@ -34,6 +34,14 @@ extern TaskHandle_t handle_display_task;
 extern TaskHandle_t handle_server_com;      // Inicializo la tarea
 extern SemaphoreHandle_t sem_global_vars;  // Inicializo los semáforos
 
+typedef struct {
+    float temp;
+    float temp_tmr;
+    int hum;
+    uint8_t smoke;
+    uint8_t door_open;
+} sensor_data_t;
+
 
 //variables que almacenan las medidas de la temperatura
 extern float temp, temp_tmr, temp_copy, temp_tmr_copy;

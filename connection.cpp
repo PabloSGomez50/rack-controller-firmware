@@ -3,17 +3,22 @@
 #include <EthernetENC.h>
 #include <SSLClient.h>
 #include "trust_anchors.h"
-#include <FirebaseJson.h>
+#include <ArduinoJson.h>
+#include <HTTPClient.h>
 
 #include <WiFi.h>
 #include <WiFiClientSecure.h>
+#include "global_variables.h"
+#include "freertos/semphr.h"
 
 // MAC address
-byte mac[] = { 0xDE, 0xAD, 0xBE, 0xEF, 0xFE, 0xED };
+byte mac[] = {0xDE, 0xAD, 0xBE, 0xEF, 0xFE, 0xED};
 
-//Endpoint de la API y del servidor:
+// Endpoint de la API y del servidor:
 char server[] = "rack-controller-arg-default-rtdb.firebaseio.com";
 char server_host[] = "rack-controller-arg-default-rtdb.firebaseio.com";
+
+char webpage[] = "http://192.168.10.104:3000";
 
 // Seteo una ip estatica por si el DHCP falla
 IPAddress ip(192, 168, 0, 177);
@@ -40,9 +45,8 @@ WiFiClientSecure wclient;
 // indica qué interfaz está activa
 bool useWiFi = true;
 
-FirebaseJson data_in;
-
-void ethernetSetup(){
+void ethernetSetup()
+{
   // SCK=18, MISO=19, MOSI=23, CS=5
   SPI.begin(ETH_CLK_PIN, ETH_MISO_PIN, ETH_MOSI_PIN, ETH_CS_PIN);
   // delay(10);
@@ -50,18 +54,22 @@ void ethernetSetup(){
 }
 
 // Comprueba si hay hardware Ethernet presente
-bool hardwareCheck() {
+bool hardwareCheck()
+{
   return Ethernet.hardwareStatus() != EthernetNoHardware;
-  if (Ethernet.hardwareStatus() == EthernetNoHardware) {
+  if (Ethernet.hardwareStatus() == EthernetNoHardware)
+  {
     Serial.println("No se encontró el modulo Ethernet.");
     return false;
   }
   return true;
 }
 
-bool wireIsConnected() {
+bool wireIsConnected()
+{
   return Ethernet.linkStatus() == LinkON;
-  if (Ethernet.linkStatus() == LinkON) {
+  if (Ethernet.linkStatus() == LinkON)
+  {
     Serial.println("Cable Ethernet conectado.");
     return 1;
   }
@@ -69,13 +77,16 @@ bool wireIsConnected() {
   return 0;
 }
 
-bool wifiConnect(const char* ssid = WIFI_SSID, const char* pass = WIFI_PASS, unsigned long timeoutMs = 15000) {
+bool wifiConnect(const char *ssid = WIFI_SSID, const char *pass = WIFI_PASS, unsigned long timeoutMs = 15000)
+{
   Serial.println("Intentando conectar por WiFi (fallback)...");
   WiFi.mode(WIFI_STA);
   WiFi.begin(ssid, pass);
   unsigned long start = millis();
-  while ((millis() - start) < timeoutMs) {
-    if (WiFi.status() == WL_CONNECTED) {
+  while ((millis() - start) < timeoutMs)
+  {
+    if (WiFi.status() == WL_CONNECTED)
+    {
       Serial.print("WiFi conectado, IP: ");
       Serial.println(WiFi.localIP());
       wclient.setInsecure();
@@ -89,11 +100,15 @@ bool wifiConnect(const char* ssid = WIFI_SSID, const char* pass = WIFI_PASS, uns
   return false;
 }
 
-bool dhcpInit() {
-  if (Ethernet.hardwareStatus() != EthernetNoHardware && Ethernet.linkStatus() == LinkON) {
+bool dhcpInit()
+{
+  if (Ethernet.hardwareStatus() != EthernetNoHardware && Ethernet.linkStatus() == LinkON)
+  {
     Serial.println("Initialize Ethernet with DHCP:");
-    for (int i = 0; i < 3; i++) {
-      if (Ethernet.begin(mac) != 0) {
+    for (int i = 0; i < 3; i++)
+    {
+      if (Ethernet.begin(mac) != 0)
+      {
         Serial.print("  IP asignada por DHCP ");
         Serial.println(Ethernet.localIP());
         Serial.println("connecting to " + String(server) + " ...");
@@ -102,155 +117,188 @@ bool dhcpInit() {
         return useWiFi;
       }
     }
-  
+
     // DHCP ha fallado 3 veces => intenta con IP estática
     Serial.println("Error al configurar Ethernet usando DHCP. Intentando IP estatica...");
     Ethernet.begin(mac, ip, myDns);
-    if (Ethernet.localIP() != INADDR_NONE) {
+    if (Ethernet.localIP() != INADDR_NONE)
+    {
       Serial.print("  IP asignada estaticamente: ");
       Serial.println(Ethernet.localIP());
       Serial.println("connecting to " + String(server) + " ...");
       delay(2000);
       useWiFi = false;
       return useWiFi;
-    } else {
+    }
+    else
+    {
       Serial.println("Error al configurar Ethernet con IP estatica.");
     }
   }
 
-  if(useWiFi && !wifiConnect()) {
-    while (true) {
+  if (useWiFi && !wifiConnect())
+  {
+    while (true)
+    {
       Serial.println("No se pudo conectar por WiFi fallback.");
       delay(1000);
     }
   }
   // si no, pruebo WiFi fallback
   return useWiFi;
-
 }
 
-bool isWifiConnected() {
+bool isWifiConnected()
+{
   return useWiFi;
 }
 
-void connectionMantain(){
+void connectionMantain()
+{
   // mantener la conexión Ethernet si se está usando
-  if (!useWiFi) Ethernet.maintain();
+  if (!useWiFi)
+    Ethernet.maintain();
 }
 
-void handleServerResponse() {
-  data_in.clear();
-  if (useWiFi) {
-    if (data_in.readFrom(wclient)) {
-      // parsed
-    } else {
-      Serial.println("Error al leer JSON desde el servidor (WiFi)");
-    }
-  } else {
-    if (data_in.readFrom(sslEthClient)) {
-      // parsed
-    } else {
-      Serial.println("Error al leer JSON desde el servidor (Ethernet)");
-    }
-  }
-}
-
-bool httpsGET() {
-  // servidor y el puerto, 443 es el puerto estándar para HTTPS
-  if (useWiFi) {
-    if (wclient.connect(server, 443)) {
-      wclient.println("GET /.json HTTP/1.1");
-      wclient.println("User-Agent: SSLClientOverWiFi");
-      wclient.println("Host: " + String(server_host));
-      wclient.println("Connection: close");
-      wclient.println();
-      return true;
-    } else {
-      Serial.println("Falló la conexión WiFi");
-      return false;
-    }
-  } else {
-    if (sslEthClient.connect(server, 443)) {
-      sslEthClient.println("GET /.json HTTP/1.1");
-      sslEthClient.println("User-Agent: SSLClientOverEthernet");
-      sslEthClient.println("Host: " + String(server_host));
-      sslEthClient.println("Connection: close");
-      sslEthClient.println();
-      return true;
-    } else {
-      Serial.println("Falló la conexión Ethernet");
-      return false;
-    }
-  }
-}
-
-bool httpsPUT(String payload) {
-  // servidor y el puerto, 443 es el puerto estándar para HTTPS
-  if (useWiFi) {
-    if (wclient.connect(server, 443)) {
-      wclient.println("PUT /.json HTTP/1.1");
-      wclient.println("User-Agent: SSLClientOverWiFi");
-      wclient.println("Host: " + String(server_host));
-      wclient.println("Content-Type: application/json");
-      wclient.println("Content-Length: " + String(payload.length()));
-      wclient.println("Connection: close");
-      wclient.println();
-      wclient.println(payload);
-      return true;
-    } else {
-      Serial.println("Falló la conexión WiFi");
-      return false;
-    }
-  } else {
-    if (sslEthClient.connect(server, 443)) {
-      sslEthClient.println("PUT /.json HTTP/1.1");
-      sslEthClient.println("User-Agent: SSLClientOverEthernet");
-      sslEthClient.println("Host: " + String(server_host));
-      sslEthClient.println("Content-Type: application/json");
-      sslEthClient.println("Content-Length: " + String(payload.length()));
-      sslEthClient.println("Connection: close");
-      sslEthClient.println();
-      sslEthClient.println(payload);
-      return true;
-    } else {
-      Serial.println("Falló la conexión Ethernet");
-      return false;
-    }
-  }
-}
-
-void clientStop(){
-  if (useWiFi) {
+void clientStop()
+{
+  if (useWiFi)
+  {
     wclient.stop();
-  } else {
+  }
+  else
+  {
     sslEthClient.stop();
   }
   return;
 }
 
-int isClientAvailable(){
-  if (useWiFi) return wclient.available();
+int isClientAvailable()
+{
+  if (useWiFi)
+    return wclient.available();
   return sslEthClient.available();
 }
 
-bool isClientConnected(){
-  if (useWiFi) return wclient.connected();
+bool isClientConnected()
+{
+  if (useWiFi)
+    return wclient.connected();
   return sslEthClient.connected();
 }
 
-/*
-void handleServerResponse() {
-  //Para ver la respuesta completa por consola
-  int len = client.available();
-  byte buffer[512];
-  if (len > 512) len = 512;
-  client.read(buffer, len);
-  Serial.write(buffer, len);
-  
-  data_in.clear();
-  if (data_in.readFrom(client)) {
-  } else {
-    Serial.println("Error al leer JSON desde el servidor");
-  }
+void send_sensor_data(sensor_data_t data)
+{
+  StaticJsonDocument<256> doc;
+  doc["temperature"] = data.temp;
+  doc["temp_tmr"] = data.temp_tmr;
+  doc["humidity"] = data.hum;
+  doc["smoke"] = (bool) data.smoke;
+  doc["door_open"] = (bool) data.door_open;
+  doc["timestamp"] = millis(); // o ISO string
+
+  String payload;
+  serializeJson(doc, payload);
+
+  HTTPClient http;
+  String url = String(webpage) + "/api/sensor";
+  http.begin(url);
+  http.addHeader("Content-Type", "application/json");
+  int httpResponseCode = http.POST(payload);
+  http.end();
 }
-*/
+
+void send_fans_data(bool fan1_on, bool fan2_on, bool fan3_on)
+{
+  StaticJsonDocument<256> doc;
+  doc["fan1_on"] = fan1_on;
+  doc["fan2_on"] = fan2_on;
+  doc["fan3_on"] = fan3_on;
+  doc["timestamp"] = millis(); // o ISO string
+
+  String payload;
+  serializeJson(doc, payload);
+
+  HTTPClient http;
+  String url = String(webpage) + "/api/fans";
+  http.begin(url);
+  http.addHeader("Content-Type", "application/json");
+  int httpResponseCode = http.POST(payload);
+  http.end();
+}
+
+void load_data_from_server()
+{
+  // Intenta obtener la configuración desde el servidor local: http://<webpage>/api/config
+  String url = String(webpage) + "/api/config";
+  HTTPClient http;
+  String payload;
+  int status_code = -1;
+
+  // if (useWiFi)
+  // HTTP over WiFi (insecure/plain HTTP expected for local webapp)
+  http.begin(url);
+  // else
+  //   http.begin(ethClient, url);
+  // }
+  // HTTP over Ethernet using ethClient
+  status_code = http.GET();
+  if (status_code == HTTP_CODE_OK)
+  {
+    payload = http.getString();
+  }
+  else
+  {
+    Serial.printf("load_data_from_server: %s GET failed, code=%d\n", useWiFi ? "WiFi" : "Ethernet", status_code);
+  }
+  http.end();
+
+  if (payload.length() == 0)
+    return;
+
+  // Parse JSON and update globals
+  StaticJsonDocument<256> doc;
+  DeserializationError err = deserializeJson(doc, payload);
+  if (err)
+  {
+    Serial.print("load_data_from_server: JSON parse error: ");
+    Serial.println(err.c_str());
+    return;
+  }
+
+  // Safely update shared globals if semaphore is available
+  if (sem_global_vars != NULL)
+    xSemaphoreTake(sem_global_vars, portMAX_DELAY);
+
+  if (doc.containsKey("max_hum_value"))
+  {
+    crit_hum = doc["max_hum_value"].as<int>();
+  }
+  if (doc.containsKey("max_temp_value"))
+  {
+    crit_temp = doc["max_temp_value"].as<float>();
+  }
+  if (doc.containsKey("max_temp_tmr_value"))
+  {
+    crit_temp_tmr = doc["max_temp_tmr_value"].as<float>();
+  }
+  if (doc.containsKey("manual_speed"))
+  {
+    manual_speed = doc["manual_speed"].as<float>();
+  }
+  if (doc.containsKey("rele"))
+  {
+    rele = doc["rele"].as<bool>();
+  }
+  if (doc.containsKey("buzzer"))
+  {
+    buzzer = doc["buzzer"].as<bool>();
+  }
+  if (doc.containsKey("is_automatic_speed"))
+  {
+    is_automatic_speed = doc["is_automatic_speed"].as<bool>();
+  }
+
+  if (sem_global_vars != NULL)
+    xSemaphoreGive(sem_global_vars);
+}
