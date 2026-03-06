@@ -1,7 +1,4 @@
-
-#include "global_variables.h"
-#include <Wire.h>
-#include <LiquidCrystal_I2C.h>
+#include "lcd_display.h"
 
 LiquidCrystal_I2C lcd(0x27, 16, 2);  // set the LCD address to 0x27 for a 16 chars and 2 line display
 
@@ -25,29 +22,15 @@ void printMeasures() {
   lcd.print("T:" + s_temp + " H:" + s_hum + " TS:" + s_temp_tmr + " ");
 }
 
-void printFanStatus() {
-  int blanks = 6;
-  String fans;
-  if (fan1_on) {
-    fans = "1 ";
-    blanks = blanks - 2;
-  }
-  if (fan2_on) {
-    fans = fans + "2 ";
-    blanks = blanks - 2;
-  }
-  if (fan3_on) {
-    fans = fans + "3 ";
-    blanks = blanks - 2;
-  }
+void printFanStatus(fans_data_t fans_data) {
+  char line[17];
+  sprintf(line, "F1:%5dF2:%5d", fans_data.rpm_fan1, fans_data.rpm_fan2);
+  lcd.setCursor(0, 0);
+  lcd.print(line);
+
+  sprintf(line, "F3:%5dV:%5d%%", fans_data.rpm_fan3, speed * 100);
   lcd.setCursor(0, 1);
-  lcd.print("FAN: " + fans);
-  for (int i = 11 - blanks; i < 11; i++) {
-    lcd.setCursor(i, 1);
-    lcd.print(" ");
-  }
-  lcd.setCursor(11, 1);
-  lcd.print("V:" + String(speed * 100, 0) + "%");
+  lcd.print(line);
 }
 
 void printRedStatus() {

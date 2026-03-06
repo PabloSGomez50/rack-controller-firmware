@@ -37,10 +37,17 @@ extern SemaphoreHandle_t sem_global_vars;  // Inicializo los semáforos
 typedef struct {
     float temp;
     float temp_tmr;
-    int hum;
+    uint8_t hum;
     uint8_t smoke;
     uint8_t door_open;
 } sensor_data_t;
+
+typedef struct {
+    uint32_t rpm_fan1;
+    uint32_t rpm_fan2;
+    uint32_t rpm_fan3;
+    float speed;
+} fans_data_t;
 
 
 //variables que almacenan las medidas de la temperatura
@@ -73,8 +80,6 @@ extern bool crit_rh_flag;
 extern bool crit_temp_tmr_flag;
 //true if there is smoke
 extern bool smoke_flag;
-//true if door was opened
-extern bool is_door_open;
 //true if connected
 extern bool connected;
 //true if eth wire not connect

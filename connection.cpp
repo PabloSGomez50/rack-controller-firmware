@@ -1,15 +1,4 @@
-#include "driver/gpio.h"
-#include <SPI.h>
-#include <EthernetENC.h>
-#include <SSLClient.h>
-#include "trust_anchors.h"
-#include <ArduinoJson.h>
-#include <HTTPClient.h>
-
-#include <WiFi.h>
-#include <WiFiClientSecure.h>
-#include "global_variables.h"
-#include "freertos/semphr.h"
+#include "connection.h"
 
 // MAC address
 byte mac[] = {0xDE, 0xAD, 0xBE, 0xEF, 0xFE, 0xED};
@@ -18,7 +7,6 @@ byte mac[] = {0xDE, 0xAD, 0xBE, 0xEF, 0xFE, 0xED};
 char server[] = "rack-controller-arg-default-rtdb.firebaseio.com";
 char server_host[] = "rack-controller-arg-default-rtdb.firebaseio.com";
 
-char webpage[] = "http://192.168.10.104:3000";
 
 // Seteo una ip estatica por si el DHCP falla
 IPAddress ip(192, 168, 0, 177);
@@ -185,120 +173,4 @@ bool isClientConnected()
   if (useWiFi)
     return wclient.connected();
   return sslEthClient.connected();
-}
-
-void send_sensor_data(sensor_data_t data)
-{
-  StaticJsonDocument<256> doc;
-  doc["temperature"] = data.temp;
-  doc["temp_tmr"] = data.temp_tmr;
-  doc["humidity"] = data.hum;
-  doc["smoke"] = (bool) data.smoke;
-  doc["door_open"] = (bool) data.door_open;
-  doc["timestamp"] = millis(); // o ISO string
-
-  String payload;
-  serializeJson(doc, payload);
-
-  HTTPClient http;
-  String url = String(webpage) + "/api/sensor";
-  http.begin(url);
-  http.addHeader("Content-Type", "application/json");
-  int httpResponseCode = http.POST(payload);
-  http.end();
-}
-
-void send_fans_data(bool fan1_on, bool fan2_on, bool fan3_on)
-{
-  StaticJsonDocument<256> doc;
-  doc["fan1_on"] = fan1_on;
-  doc["fan2_on"] = fan2_on;
-  doc["fan3_on"] = fan3_on;
-  doc["timestamp"] = millis(); // o ISO string
-
-  String payload;
-  serializeJson(doc, payload);
-
-  HTTPClient http;
-  String url = String(webpage) + "/api/fans";
-  http.begin(url);
-  http.addHeader("Content-Type", "application/json");
-  int httpResponseCode = http.POST(payload);
-  http.end();
-}
-
-void load_data_from_server()
-{
-  // Intenta obtener la configuración desde el servidor local: http://<webpage>/api/config
-  String url = String(webpage) + "/api/config";
-  HTTPClient http;
-  String payload;
-  int status_code = -1;
-
-  // if (useWiFi)
-  // HTTP over WiFi (insecure/plain HTTP expected for local webapp)
-  http.begin(url);
-  // else
-  //   http.begin(ethClient, url);
-  // }
-  // HTTP over Ethernet using ethClient
-  status_code = http.GET();
-  if (status_code == HTTP_CODE_OK)
-  {
-    payload = http.getString();
-  }
-  else
-  {
-    Serial.printf("load_data_from_server: %s GET failed, code=%d\n", useWiFi ? "WiFi" : "Ethernet", status_code);
-  }
-  http.end();
-
-  if (payload.length() == 0)
-    return;
-
-  // Parse JSON and update globals
-  StaticJsonDocument<256> doc;
-  DeserializationError err = deserializeJson(doc, payload);
-  if (err)
-  {
-    Serial.print("load_data_from_server: JSON parse error: ");
-    Serial.println(err.c_str());
-    return;
-  }
-
-  // Safely update shared globals if semaphore is available
-  if (sem_global_vars != NULL)
-    xSemaphoreTake(sem_global_vars, portMAX_DELAY);
-
-  if (doc.containsKey("max_hum_value"))
-  {
-    crit_hum = doc["max_hum_value"].as<int>();
-  }
-  if (doc.containsKey("max_temp_value"))
-  {
-    crit_temp = doc["max_temp_value"].as<float>();
-  }
-  if (doc.containsKey("max_temp_tmr_value"))
-  {
-    crit_temp_tmr = doc["max_temp_tmr_value"].as<float>();
-  }
-  if (doc.containsKey("manual_speed"))
-  {
-    manual_speed = doc["manual_speed"].as<float>();
-  }
-  if (doc.containsKey("rele"))
-  {
-    rele = doc["rele"].as<bool>();
-  }
-  if (doc.containsKey("buzzer"))
-  {
-    buzzer = doc["buzzer"].as<bool>();
-  }
-  if (doc.containsKey("is_automatic_speed"))
-  {
-    is_automatic_speed = doc["is_automatic_speed"].as<bool>();
-  }
-
-  if (sem_global_vars != NULL)
-    xSemaphoreGive(sem_global_vars);
 }

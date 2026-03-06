@@ -1,3 +1,10 @@
+#ifndef LCD_DISPLAY_H
+#define LCD_DISPLAY_H
+
+#include "global_variables.h"
+#include <Wire.h>
+#include <LiquidCrystal_I2C.h>
+
 //Inicio comunicacion con el display
 void initDisplayCommunication(void);
 
@@ -16,7 +23,7 @@ void displayOff(void);
 void printMeasures(void);
 
 //Imprime los fans activos y la velocidad
-void printFanStatus(void);
+void printFanStatus(fans_data_t fans_data);
 
 //      PRIMERA LINEA         //
 
@@ -46,3 +53,5 @@ void printTemperatureAlarm(void);
 
 //Imprime "TEMP SONDA ALTA!"
 void printTermistorAlarm(void);
+
+#endif

@@ -7,7 +7,7 @@ const int FAN_METER[3] = { FAN1_METER, FAN2_METER, FAN3_METER };  // Pines de lo
 
 // Contadores de pulsos (incrementados en ISR)
 volatile uint32_t pulseCounter[3] = {0, 0, 0};
-uint32_t rpm[3] = {0, 0, 0};
+// uint32_t rpm[3] = {0, 0, 0};
 
 // Mutex o Spinlock para proteger la lectura de los contadores
 portMUX_TYPE mux = portMUX_INITIALIZER_UNLOCKED;
@@ -87,10 +87,10 @@ void fansInit() {
 
 uint32_t getFanSpeed(int fan) {
   noInterrupts();
-  rpm[fan - 1] = (pulseCounter[fan - 1] * 60000) / (FAN_PERIOD * FAN_PULSES); // Convertir a RPM
-  pulseCounter[fan - 1] = 0; // Reiniciar el contador para la próxima medición
+  uint32_t pulses = pulseCounter[fan - 1];
+  pulseCounter[fan - 1] = 0; // Reiniciar el contador
   interrupts();
-  return rpm[fan - 1];
+  return (pulses * 60000) / (FAN_PERIOD * FAN_PULSES);
 }
 
 float getDynamicSpeed(int hum, float temp, float temp_tmr) {

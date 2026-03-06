@@ -2,7 +2,7 @@
 #include "global_variables.h"
 #include "connection.h"
 // #include <FirebaseJson.h>
-// #include "data_parser.h"
+#include "data_parser.h"
 #include "lcd_display.h"
 #include "control.h"
 #include "measure.h"
@@ -11,6 +11,7 @@ TaskHandle_t handle_display_task;
 TaskHandle_t handle_server_com;      // Inicializo la tarea
 SemaphoreHandle_t sem_global_vars;  // Inicializo los semáforos
 QueueHandle_t queue_sensor_data;
+QueueHandle_t queue_fans_data;
 
 void task_get_measures(void *parameter);
 void task_maintain_connection(void *parameter);
@@ -30,12 +31,17 @@ void setup() {
   if (queue_sensor_data == NULL) {
     Serial.println("Error: No se pudo crear queue_sensor_data (heap insuficiente).");
   }
+  queue_fans_data = xQueueCreate(1, sizeof(fans_data_t)); // creo la cola para enviar datos de sensores entre tareas
+  if (queue_fans_data == NULL) {  
+    Serial.println("Error: No se pudo crear queue_fans_data (heap insuficiente).");
+  }
+
   ethernetSetup();
   
   // needed to start-up task1
   vTaskDelay(500 / portTICK_PERIOD_MS);
   dhcpInit();
-  if (!useWiFi) {
+  if (!isWifiConnected()) {
     // no hago nada si hay error de hardware
     while (hardwareCheck() == 0) {
       Serial.println("No se encontró el modulo Ethernet.");
@@ -102,10 +108,16 @@ void setup() {
 }
 
 void task_control_fans(void *parameter) {
+  fans_data_t fans_data;
   while (true) {
       // xSemaphoreTake(sem_global_vars, portMAX_DELAY);
+      fans_data.rpm_fan1 = getFanSpeed(1);
+      fans_data.rpm_fan2 = getFanSpeed(2);
+      fans_data.rpm_fan3 = getFanSpeed(3);
+      fans_data.speed = speed;
+      xQueueOverwrite(queue_fans_data, &fans_data);
       speed = (is_automatic_speed) ? getDynamicSpeed(hum, temp, temp_tmr) : manual_speed;
-      checkFans(speed);
+      // checkFans(speed);
       setAllFanSpeed(speed);
       // xSemaphoreGive(sem_global_vars);
       vTaskDelay(FAN_PERIOD / portTICK_PERIOD_MS);
@@ -115,10 +127,10 @@ void task_control_fans(void *parameter) {
 void task_display(void *parameter) {
   displayInit();
   uint8_t display_seq = 0;
+  fans_data_t fans_data = {0};
   while (true) {
 
     displayOn();
-    is_door_open = true;
     while (digitalRead(SWITCH_PIN)) {
       switch (display_seq) {
         case 0:
@@ -126,16 +138,18 @@ void task_display(void *parameter) {
           printMeasures(); // Fila 1
           break;
         case 1:
-          printRedStatus(); // Fila 0
-          printFanStatus(); // Fila 1
+          xQueuePeek(queue_fans_data, &fans_data, 0);
+          printFanStatus(fans_data); // Fila 0 y 1
           break;
+        // case 2:
+        //   printRedStatus(); // Fila 0
+        //   break;
       }
       display_seq = (display_seq + 1) % 2;
-      vTaskDelay(1000 / portTICK_PERIOD_MS);
+      vTaskDelay(2000 / portTICK_PERIOD_MS);
     }
     
     displayOff();
-    is_door_open = false;
     ulTaskNotifyTake(pdTRUE, portMAX_DELAY);   // wait for door event
     vTaskDelay(pdMS_TO_TICKS(50));
   }
@@ -145,7 +159,7 @@ void task_display(void *parameter) {
 void task_get_measures(void *parameter) {
   sensor_data_t sensor_data;
   // sensor_data_t *sensor_max = (sensor_data_t *) parameter;
-
+  uint8_t measure_seq = 0;
   while (true) {
       //tomo medidas y checkeo estados cada 1 segundo
       sensor_data.temp = get_temp();
@@ -164,12 +178,15 @@ void task_get_measures(void *parameter) {
       else
         digitalWrite(BUZZER, 0);
       
-      if (queue_sensor_data != NULL) {
-        xQueueSend(queue_sensor_data, &sensor_data, 10 / portTICK_PERIOD_MS);
-      } else {
-        Serial.println("Error: queue_sensor_data no creada");
-      }
-      
+        measure_seq++;
+        if (measure_seq >= 20) {
+          measure_seq = 0;
+          if (queue_sensor_data != NULL) {
+            xQueueSend(queue_sensor_data, &sensor_data, 10 / portTICK_PERIOD_MS);
+          } else {
+            Serial.println("Error: queue_sensor_data no creada");
+          }
+        }
       vTaskDelay(500 / portTICK_PERIOD_MS);
   }
 }
@@ -178,6 +195,7 @@ void task_get_measures(void *parameter) {
 void task_server_com(void *parameter) {
 
   sensor_data_t sensor_data;
+  fans_data_t fans_data;
   while (true) {
     if (queue_sensor_data == NULL) {
       // Cola no creada: evitar llamar a API de cola con NULL (provoca assert)
@@ -187,79 +205,12 @@ void task_server_com(void *parameter) {
 
     if (xQueueReceive(queue_sensor_data, &sensor_data, portMAX_DELAY) == pdTRUE) {
       send_sensor_data(sensor_data);
+      xQueuePeek(queue_fans_data, &fans_data, 0);
+      send_fans_data(fans_data);
       Serial.println("Datos enviados al servidor");
     }
   }
 }
-
-// Núcleo 1
-// void task_server_com_old(void *parameter) {
-//   uint strikeCount = 0;
-//   bool isGet = true, chainRequest = false;
-//   unsigned long currentTimeN1 = 0;
-//   unsigned long lastMantain = 0;
-//   unsigned long timeoutResponse = 1000;      // Tiempo de espera de 1 segundo
-//   unsigned long newRequestInterval = 10000;  // Intervalo para realizar nueva consulta
-  
-//   while (true) {
-//     if (millis() - currentTimeN1 > newRequestInterval) {
-//       // Start cycle
-//       if (httpsGET()) {
-//         isGet = true;
-//         xSemaphoreTake(sem_global_vars, portMAX_DELAY);
-//         connected = true;
-//         wire_error = false;
-//         xSemaphoreGive(sem_global_vars);
-//         strikeCount = 0;
-//       } else {
-//         strikeCount += 1;
-//         if (strikeCount > 3) connected = false;
-//       }
-//       currentTimeN1 = millis();
-//     } else if (chainRequest && !strikeCount) {
-//       if (httpsPUT(body)) {
-//         chainRequest = false;
-//         xSemaphoreTake(sem_global_vars, portMAX_DELAY);
-//         connected = true;
-//         wire_error = false;
-//         xSemaphoreGive(sem_global_vars);
-//         strikeCount = 0;
-//       } else {
-//         strikeCount += 1;
-//         if (strikeCount > 3) connected = false;
-//       }
-//       isGet = false;
-//       // End cycle
-//     } else if (isClientConnected()) {
-//       if (isGet) {
-//         while (isClientAvailable()) {
-//           handleServerResponse();
-
-//           xSemaphoreTake(sem_global_vars, portMAX_DELAY);
-//           downloadData(data_in);
-//           uploadDataToString();
-          
-//           (rele) ? digitalWrite(RELE_PIN, 1) : digitalWrite(RELE_PIN, 0);
-//           xSemaphoreGive(sem_global_vars);
-          
-//           chainRequest = true;
-//           clientStop();
-//           // Timeout to data lecture
-//           if (millis() - currentTimeN1 > timeoutResponse) {
-//             clientStop();
-//           }
-//         }
-//         // Timeout to server's response
-//         if (millis() - currentTimeN1 > timeoutResponse) {
-//           clientStop();
-//         }
-//       } else {
-//         clientStop();
-//       }
-//     }
-//     vTaskDelay(100 / portTICK_PERIOD_MS);
-//   }
-// }
 
 void loop() {
   vTaskDelay(5000 / portTICK_PERIOD_MS);

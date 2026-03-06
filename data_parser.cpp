@@ -1,94 +1,116 @@
-#include "global_variables.h"
-#include <FirebaseJson.h>
+#include "data_parser.h"
 
-String body = "";
+char webpage[] = "http://192.168.10.104:3000";
 
-//Pone en default el objeto json y lo devuelve ----
-//Valores default [booleans = false, meassures = 25, max_temp = 45 & max_hum = 80] Debo actualizar
-FirebaseJson createTemplate(FirebaseJson &json) {
-  json.clear();
-  json.set("UsersData/" + String(USER) + "/crit_hum", false);
-  json.set("UsersData/" + String(USER) + "/crit_temp", false);
-  json.set("UsersData/" + String(USER) + "/door_status", false);
-  json.set("UsersData/" + String(USER) + "/fan_status_1", false);
-  json.set("UsersData/" + String(USER) + "/fan_status_2", false);
-  json.set("UsersData/" + String(USER) + "/fan_status_3", false);
-  json.set("UsersData/" + String(USER) + "/humidity", 25);
-  json.set("UsersData/" + String(USER) + "/max_hum_value", 80);
-  json.set("UsersData/" + String(USER) + "/max_temp_tmr_value", 45);
-  json.set("UsersData/" + String(USER) + "/max_temp_value", 45);
-  json.set("UsersData/" + String(USER) + "/rele", false);
-  json.set("UsersData/" + String(USER) + "/smoke_alarm", false);
-  json.set("UsersData/" + String(USER) + "/temp_tmr", 25);
-  json.set("UsersData/" + String(USER) + "/temperature", 25);
-  return json;
+void send_sensor_data(sensor_data_t data)
+{
+  StaticJsonDocument<256> doc;
+  doc["temperature"] = data.temp;
+  doc["temp_tmr"] = data.temp_tmr;
+  doc["humidity"] = data.hum;
+  doc["smoke"] = (bool) data.smoke;
+  doc["door_open"] = (bool) data.door_open;
+  doc["timestamp"] = millis(); // o ISO string
+
+  String payload;
+  serializeJson(doc, payload);
+
+  HTTPClient http;
+  String url = String(webpage) + "/api/sensor";
+  http.begin(url);
+  http.addHeader("Content-Type", "application/json");
+  int httpResponseCode = http.POST(payload);
+  Serial.printf("send_sensor_data: POST to %s, code=%d\n", url.c_str(), httpResponseCode);
+  http.end();
 }
 
-//Devuelve el estado booleano, devuelve cero si no encontro nada e imprime error.
-bool getState(String key, FirebaseJson &json) {
-  FirebaseJsonData result;
-  json.get(result, "UsersData/" + String(USER) + "/" + key);
-  if (result.success) {
-    return result.to<bool>();
+void send_fans_data(fans_data_t fans_data)
+{
+  StaticJsonDocument<256> doc;
+  doc["fan1"] = fans_data.rpm_fan1;
+  doc["fan2"] = fans_data.rpm_fan2;
+  doc["fan3"] = fans_data.rpm_fan3;
+  doc["speed"] = fans_data.speed;
+  doc["timestamp"] = millis(); // o ISO string
+
+  String payload;
+  serializeJson(doc, payload);
+
+  HTTPClient http;
+  String url = String(webpage) + "/api/fans";
+  http.begin(url);
+  http.addHeader("Content-Type", "application/json");
+  int httpResponseCode = http.POST(payload);
+  Serial.printf("send_fans_data: POST to %s, code=%d\n", url.c_str(), httpResponseCode);
+  http.end();
+}
+
+void load_data_from_server()
+{
+  // Intenta obtener la configuración desde el servidor local: http://<webpage>/api/config
+  String url = String(webpage) + "/api/config";
+  HTTPClient http;
+  String payload;
+  int status_code = -1;
+
+  http.begin(url);
+  status_code = http.GET();
+  if (status_code == HTTP_CODE_OK)
+  {
+    payload = http.getString();
   }
-  Serial.println("No se encontro " + key);
-  return 0;
-}
-
-//Devuelve el valor float, devuelve cero si no se encontro nada e imprime error.
-float getValue(String key, FirebaseJson &json) {
-  FirebaseJsonData result;
-  json.get(result, "UsersData/" + String(USER) + "/" + key);
-  if (result.success) {
-    return result.to<float>();
+  else
+  {
+    Serial.printf("load_data_from_server: GET failed, code=%d\n", status_code);
   }
-  Serial.println("No se encontro " + key);
-  return 0;
-}
+  http.end();
 
-//actualiza el valor flotante, verifica antes si existe la ruta. Devuelve true or false
-bool upValue(String key, float value, FirebaseJson &json) {
-  if (getValue(key, json)) {
-    json.set("UsersData/" + String(USER) + "/" + key, value);
-    return 1;
-  } else {
-    return 0;
+  if (payload.length() == 0)
+    return;
+
+  // Parse JSON and update globals
+  StaticJsonDocument<256> doc;
+  DeserializationError err = deserializeJson(doc, payload);
+  if (err)
+  {
+    Serial.print("load_data_from_server: JSON parse error: ");
+    Serial.println(err.c_str());
+    return;
   }
-}
 
-//Devuelve string con el json cargado, true si fue exitoso
-bool uploadDataToString(){
-  FirebaseJson json;
-  json.set("UsersData/" + String(USER) + "/crit_hum", crit_rh_flag);
-  json.set("UsersData/" + String(USER) + "/crit_temp", crit_temp_flag);
-  json.set("UsersData/" + String(USER) + "/crit_temp_tmr", crit_temp_tmr_flag);
-  json.set("UsersData/" + String(USER) + "/smoke_alarm", smoke_flag);
-  json.set("UsersData/" + String(USER) + "/door_status", is_door_open);
-  json.set("UsersData/" + String(USER) + "/fan_status_1", fan1_on);
-  json.set("UsersData/" + String(USER) + "/fan_status_2", fan2_on);
-  json.set("UsersData/" + String(USER) + "/fan_status_3", fan3_on);
-  json.set("UsersData/" + String(USER) + "/max_hum_value", crit_hum);
-  json.set("UsersData/" + String(USER) + "/max_temp_tmr_value", crit_temp_tmr);
-  json.set("UsersData/" + String(USER) + "/max_temp_value", crit_temp);
-  json.set("UsersData/" + String(USER) + "/rele", rele);
-  json.set("UsersData/" + String(USER) + "/temperature", temp);
-  json.set("UsersData/" + String(USER) + "/temp_tmr", temp_tmr);
-  json.set("UsersData/" + String(USER) + "/humidity", hum);
-  json.set("UsersData/" + String(USER) + "/fans_speed", speed*100);
-  json.set("UsersData/" + String(USER) + "/buzzer", buzzer);
-  json.set("UsersData/" + String(USER) + "/manual_speed", manual_speed);
-  json.set("UsersData/" + String(USER) + "/is_automatic_speed", is_automatic_speed);
-  return json.toString(body, false); 
-}
+  // Safely update shared globals if semaphore is available
+  if (sem_global_vars != NULL)
+    xSemaphoreTake(sem_global_vars, portMAX_DELAY);
 
-//Descargo data del FirebaseJson y actualizo variables correspondientes
-void downloadData(FirebaseJson &json){
-  crit_hum = getValue("max_hum_value", json);
-  crit_temp = getValue("max_temp_value", json);
-  crit_temp_tmr = getValue("max_temp_tmr_value", json);
-  manual_speed = getValue("manual_speed", json);
-  rele = getState("rele", json);
-  buzzer = getState("buzzer", json);
-  is_automatic_speed = getState("is_automatic_speed", json);
-  return;
+  if (doc.containsKey("max_hum_value"))
+  {
+    crit_hum = doc["max_hum_value"].as<int>();
+  }
+  if (doc.containsKey("max_temp_value"))
+  {
+    crit_temp = doc["max_temp_value"].as<float>();
+  }
+  if (doc.containsKey("max_temp_tmr_value"))
+  {
+    crit_temp_tmr = doc["max_temp_tmr_value"].as<float>();
+  }
+  if (doc.containsKey("manual_speed"))
+  {
+    manual_speed = doc["manual_speed"].as<float>();
+  }
+  if (doc.containsKey("rele"))
+  {
+    rele = doc["rele"].as<bool>();
+  }
+  if (doc.containsKey("buzzer"))
+  {
+    buzzer = doc["buzzer"].as<bool>();
+  }
+  if (doc.containsKey("is_automatic_speed"))
+  {
+    is_automatic_speed = doc["is_automatic_speed"].as<bool>();
+  }
+
+  if (sem_global_vars != NULL)
+    xSemaphoreGive(sem_global_vars);
 }

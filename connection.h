@@ -1,5 +1,18 @@
-//Json recibido
-// extern FirebaseJson data_in;
+#ifndef CONNECTION_H
+#define CONNECTION_H
+
+#include "driver/gpio.h"
+#include <SPI.h>
+#include <EthernetENC.h>
+#include <SSLClient.h>
+#include "trust_anchors.h"
+#include <ArduinoJson.h>
+#include <HTTPClient.h>
+
+#include <WiFi.h>
+#include <WiFiClientSecure.h>
+#include "global_variables.h"
+
 
 //Set CS pin to GPIO_5
 void ethernetSetup(void);
@@ -18,15 +31,6 @@ bool dhcpInit(void);
 //Wrapper de Ethernet.mantain()
 void connectionMantain(void);
 
-//Leo respuesta del servidor y guardo los datos
-void handleServerResponse(void);
-
-//Hace una peticion https GET al server, devuelve true si fue exitosa
-bool httpsGET(void);
-
-//Hace una peticion https PUT al server, devuelve true si fue exitosa
-// bool httpsPUT(String);
-
 //wrapper de client.stop()
 void clientStop(void);
 
@@ -36,6 +40,4 @@ int isClientAvailable(void);
 //wrapper de client.connected()
 bool isClientConnected(void);
 
-void send_sensor_data(sensor_data_t data);
-
-void load_data_from_server(void);
+#endif
