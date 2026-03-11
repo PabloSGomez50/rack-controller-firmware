@@ -1,4 +1,5 @@
 #include "data_parser.h"
+#include "connection.h"
 
 char webpage[] = "http://192.168.10.104:3000";
 
@@ -15,13 +16,59 @@ void send_sensor_data(sensor_data_t data)
   String payload;
   serializeJson(doc, payload);
 
-  HTTPClient http;
   String url = String(webpage) + "/api/sensor";
-  http.begin(url);
-  http.addHeader("Content-Type", "application/json");
-  int httpResponseCode = http.POST(payload);
-  Serial.printf("send_sensor_data: POST to %s, code=%d\n", url.c_str(), httpResponseCode);
-  http.end();
+  if (isWifiConnected()) {
+    HTTPClient http;
+    http.begin(url);
+    http.addHeader("Content-Type", "application/json");
+    int httpResponseCode = http.POST(payload);
+    Serial.printf("send_sensor_data: POST to %s, code=%d\n", url.c_str(), httpResponseCode);
+    http.end();
+  } else {
+    // Raw Ethernet POST using ethClient (no TLS)
+    String s = url;
+    int p1 = s.indexOf("://");
+    int start = (p1 >= 0) ? p1 + 3 : 0;
+    int slash = s.indexOf('/', start);
+    String hostPort = (slash >= 0) ? s.substring(start, slash) : s.substring(start);
+    String path = (slash >= 0) ? s.substring(slash) : "/";
+    String host;
+    int port = 80;
+    int colon = hostPort.indexOf(':');
+    if (colon >= 0) {
+      host = hostPort.substring(0, colon);
+      port = hostPort.substring(colon + 1).toInt();
+    } else {
+      host = hostPort;
+    }
+
+    if (ethClient.connect(host.c_str(), port)) {
+      String req = String("POST ") + path + " HTTP/1.1\r\n";
+      req += String("Host: ") + host + ":" + port + "\r\n";
+      req += "Content-Type: application/json\r\n";
+      req += String("Content-Length: ") + payload.length() + "\r\n";
+      req += "Connection: close\r\n\r\n";
+      req += payload;
+      ethClient.print(req);
+
+      String status = ethClient.readStringUntil('\n');
+      int code = -1;
+      if (status.length() > 0) {
+        int sp1 = status.indexOf(' ');
+        int sp2 = (sp1 >= 0) ? status.indexOf(' ', sp1 + 1) : -1;
+        if (sp1 >= 0 && sp2 > sp1) {
+          code = status.substring(sp1 + 1, sp2).toInt();
+        }
+      }
+      Serial.printf("send_sensor_data (ethernet): POST to %s, code=%d\n", url.c_str(), code);
+      while (ethClient.connected() && ethClient.available()) {
+        ethClient.read();
+      }
+      ethClient.stop();
+    } else {
+      Serial.println("send_sensor_data: ethClient.connect failed");
+    }
+  }
 }
 
 void send_fans_data(fans_data_t fans_data)
@@ -36,13 +83,58 @@ void send_fans_data(fans_data_t fans_data)
   String payload;
   serializeJson(doc, payload);
 
-  HTTPClient http;
   String url = String(webpage) + "/api/fans";
-  http.begin(url);
-  http.addHeader("Content-Type", "application/json");
-  int httpResponseCode = http.POST(payload);
-  Serial.printf("send_fans_data: POST to %s, code=%d\n", url.c_str(), httpResponseCode);
-  http.end();
+  if (isWifiConnected()) {
+    HTTPClient http;
+    http.begin(url);
+    http.addHeader("Content-Type", "application/json");
+    int httpResponseCode = http.POST(payload);
+    Serial.printf("send_fans_data: POST to %s, code=%d\n", url.c_str(), httpResponseCode);
+    http.end();
+  } else {
+    String s = url;
+    int p1 = s.indexOf("://");
+    int start = (p1 >= 0) ? p1 + 3 : 0;
+    int slash = s.indexOf('/', start);
+    String hostPort = (slash >= 0) ? s.substring(start, slash) : s.substring(start);
+    String path = (slash >= 0) ? s.substring(slash) : "/";
+    String host;
+    int port = 80;
+    int colon = hostPort.indexOf(':');
+    if (colon >= 0) {
+      host = hostPort.substring(0, colon);
+      port = hostPort.substring(colon + 1).toInt();
+    } else {
+      host = hostPort;
+    }
+
+    if (ethClient.connect(host.c_str(), port)) {
+      String req = String("POST ") + path + " HTTP/1.1\r\n";
+      req += String("Host: ") + host + ":" + port + "\r\n";
+      req += "Content-Type: application/json\r\n";
+      req += String("Content-Length: ") + payload.length() + "\r\n";
+      req += "Connection: close\r\n\r\n";
+      req += payload;
+      ethClient.print(req);
+
+      String status = ethClient.readStringUntil('\n');
+      int code = -1;
+      if (status.length() > 0) {
+        int sp1 = status.indexOf(' ');
+        int sp2 = (sp1 >= 0) ? status.indexOf(' ', sp1 + 1) : -1;
+        if (sp1 >= 0 && sp2 > sp1) {
+          code = status.substring(sp1 + 1, sp2).toInt();
+        }
+      }
+      Serial.printf("send_fans_data (ethernet): POST to %s, code=%d\n", url.c_str(), code);
+      while (ethClient.connected() && ethClient.available()) {
+        ethClient.read();
+      }
+      ethClient.stop();
+    } else {
+      Serial.println("send_fans_data: ethClient.connect failed");
+    }
+  }
 }
 
 void load_data_from_server()
@@ -52,18 +144,59 @@ void load_data_from_server()
   HTTPClient http;
   String payload;
   int status_code = -1;
+  if (isWifiConnected()) {
+    HTTPClient httpc;
+    httpc.begin(url);
+    status_code = httpc.GET();
+    if (status_code == HTTP_CODE_OK) {
+      payload = httpc.getString();
+    } else {
+      Serial.printf("load_data_from_server: GET failed, code=%d\n", status_code);
+    }
+    httpc.end();
+  } else {
+    // Raw Ethernet GET
+    String s = url;
+    int p1 = s.indexOf("://");
+    int start = (p1 >= 0) ? p1 + 3 : 0;
+    int slash = s.indexOf('/', start);
+    String hostPort = (slash >= 0) ? s.substring(start, slash) : s.substring(start);
+    String path = (slash >= 0) ? s.substring(slash) : "/";
+    String host;
+    int port = 80;
+    int colon = hostPort.indexOf(':');
+    if (colon >= 0) {
+      host = hostPort.substring(0, colon);
+      port = hostPort.substring(colon + 1).toInt();
+    } else {
+      host = hostPort;
+    }
 
-  http.begin(url);
-  status_code = http.GET();
-  if (status_code == HTTP_CODE_OK)
-  {
-    payload = http.getString();
+    if (ethClient.connect(host.c_str(), port)) {
+      String req = String("GET ") + path + " HTTP/1.1\r\n";
+      req += String("Host: ") + host + "\r\n";
+      req += "Connection: close\r\n\r\n";
+      ethClient.print(req);
+
+      String status = ethClient.readStringUntil('\n');
+      if (status.indexOf("200") >= 0) {
+        // skip headers
+        while (ethClient.connected()) {
+          String line = ethClient.readStringUntil('\n');
+          if (line == "\r" || line.length() == 0) break;
+        }
+        payload = "";
+        while (ethClient.available()) {
+          payload += (char)ethClient.read();
+        }
+      } else {
+        Serial.printf("load_data_from_server (ethernet): GET status: %s\n", status.c_str());
+      }
+      ethClient.stop();
+    } else {
+      Serial.println("load_data_from_server: ethClient.connect failed");
+    }
   }
-  else
-  {
-    Serial.printf("load_data_from_server: GET failed, code=%d\n", status_code);
-  }
-  http.end();
 
   if (payload.length() == 0)
     return;

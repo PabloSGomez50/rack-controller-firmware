@@ -13,6 +13,13 @@
 #include <WiFiClientSecure.h>
 #include "global_variables.h"
 
+// Exponer clientes de red para usos especializados (POST manual sobre Ethernet)
+extern EthernetClient ethClient;
+// extern WiFiClientSecure wclient;
+
+// NetworkClient es la interfaz usada por HTTPClient en ESP32
+class NetworkClient;
+
 
 //Set CS pin to GPIO_5
 void ethernetSetup(void);
@@ -39,5 +46,10 @@ int isClientAvailable(void);
 
 //wrapper de client.connected()
 bool isClientConnected(void);
+
+// Devuelve un puntero al cliente de red adecuado (Ethernet o WiFi).
+// Si se solicita secure=true devuelve un cliente TLS cuando esté disponible.
+// Devuelve un puntero a NetworkClient (esperado por HTTPClient::begin)
+NetworkClient *getNetworkClient(bool secure = false);
 
 #endif

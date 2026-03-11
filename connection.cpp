@@ -3,11 +3,6 @@
 // MAC address
 byte mac[] = {0xDE, 0xAD, 0xBE, 0xEF, 0xFE, 0xED};
 
-// Endpoint de la API y del servidor:
-char server[] = "rack-controller-arg-default-rtdb.firebaseio.com";
-char server_host[] = "rack-controller-arg-default-rtdb.firebaseio.com";
-
-
 // Seteo una ip estatica por si el DHCP falla
 IPAddress ip(192, 168, 0, 177);
 IPAddress myDns(8, 8, 8, 8);
@@ -32,6 +27,22 @@ SSLClient sslEthClient(ethClient, TAs, (size_t)TAs_NUM, GPIO_NUM_34);
 WiFiClientSecure wclient;
 // indica qué interfaz está activa
 bool useWiFi = true;
+
+// Devuelve el cliente apropiado para `HTTPClient::begin(Client&, url)`.
+NetworkClient *getNetworkClient(bool secure)
+{
+  if (useWiFi)
+  {
+    return (NetworkClient *)&wclient;
+  }
+
+  // Si no usamos WiFi, estamos sobre Ethernet
+  if (secure)
+  {
+    return (NetworkClient *)&sslEthClient;
+  }
+  return (NetworkClient *)&ethClient;
+}
 
 void ethernetSetup()
 {
@@ -90,7 +101,9 @@ bool wifiConnect(const char *ssid = WIFI_SSID, const char *pass = WIFI_PASS, uns
 
 bool dhcpInit()
 {
-  if (Ethernet.hardwareStatus() != EthernetNoHardware && Ethernet.linkStatus() == LinkON)
+  bool hw_status = hardwareCheck();
+  bool wire_status =  wireIsConnected();
+  if (hw_status && wire_status)
   {
     Serial.println("Initialize Ethernet with DHCP:");
     for (int i = 0; i < 3; i++)
@@ -99,7 +112,6 @@ bool dhcpInit()
       {
         Serial.print("  IP asignada por DHCP ");
         Serial.println(Ethernet.localIP());
-        Serial.println("connecting to " + String(server) + " ...");
         delay(2000);
         useWiFi = false;
         return useWiFi;
@@ -113,7 +125,6 @@ bool dhcpInit()
     {
       Serial.print("  IP asignada estaticamente: ");
       Serial.println(Ethernet.localIP());
-      Serial.println("connecting to " + String(server) + " ...");
       delay(2000);
       useWiFi = false;
       return useWiFi;
@@ -122,6 +133,11 @@ bool dhcpInit()
     {
       Serial.println("Error al configurar Ethernet con IP estatica.");
     }
+  } else {
+    if (hw_status)
+      Serial.println("Error en wire_status");
+    else
+      Serial.println("Error en hardware_status");
   }
 
   if (useWiFi && !wifiConnect())

@@ -27,6 +27,10 @@ void setup() {
   Serial.begin(115200);  // debug
 
   sem_global_vars = xSemaphoreCreateMutex();  // creo el semáforo para el uso de las variables
+  if (sem_global_vars == NULL) {
+      Serial.println("Error: No se pudo crear el mutex global");
+      while(1); // No sigas si falla
+  }
   queue_sensor_data = xQueueCreate(10, sizeof(sensor_data_t)); // creo la cola para enviar datos de sensores entre tareas
   if (queue_sensor_data == NULL) {
     Serial.println("Error: No se pudo crear queue_sensor_data (heap insuficiente).");
@@ -35,12 +39,15 @@ void setup() {
   if (queue_fans_data == NULL) {  
     Serial.println("Error: No se pudo crear queue_fans_data (heap insuficiente).");
   }
-
+  Serial.println("Inicializando Ethernet");
+  vTaskDelay(1500 / portTICK_PERIOD_MS);
   ethernetSetup();
   
-  // needed to start-up task1
-  vTaskDelay(500 / portTICK_PERIOD_MS);
   dhcpInit();
+  // Log free heap to help debug memory-related asserts when using Ethernet
+  Serial.print("Free heap after network init: ");
+  Serial.println(ESP.getFreeHeap());
+
   if (!isWifiConnected()) {
     // no hago nada si hay error de hardware
     while (hardwareCheck() == 0) {
@@ -59,6 +66,7 @@ void setup() {
     }
   }
 
+  Serial.println("Inicio de tareas");
   
   xTaskCreatePinnedToCore(
     task_server_com,
@@ -69,6 +77,7 @@ void setup() {
     &handle_server_com,
     0 // Core ID
   );
+  vTaskSuspend(handle_server_com); // Empiezo la tarea suspendida, se activará al conectar con éxito Ethernet o WiFi
   xTaskCreatePinnedToCore(
     task_maintain_connection,
     "task_maintain_connection",
@@ -115,7 +124,11 @@ void task_control_fans(void *parameter) {
       fans_data.rpm_fan2 = getFanSpeed(2);
       fans_data.rpm_fan3 = getFanSpeed(3);
       fans_data.speed = speed;
-      xQueueOverwrite(queue_fans_data, &fans_data);
+      if (queue_fans_data != NULL) {
+        xQueueOverwrite(queue_fans_data, &fans_data);
+      } else {
+        Serial.println("Warning: queue_fans_data is NULL (skipping overwrite)");
+      }
       speed = (is_automatic_speed) ? getDynamicSpeed(hum, temp, temp_tmr) : manual_speed;
       // checkFans(speed);
       setAllFanSpeed(speed);
@@ -138,7 +151,9 @@ void task_display(void *parameter) {
           printMeasures(); // Fila 1
           break;
         case 1:
-          xQueuePeek(queue_fans_data, &fans_data, 0);
+          if (queue_fans_data != NULL) {
+            xQueuePeek(queue_fans_data, &fans_data, 0);
+          }
           printFanStatus(fans_data); // Fila 0 y 1
           break;
         // case 2:
@@ -204,9 +219,12 @@ void task_server_com(void *parameter) {
     }
 
     if (xQueueReceive(queue_sensor_data, &sensor_data, portMAX_DELAY) == pdTRUE) {
+      Serial.println("Inicio - Activacion de send_sensor-data");
       send_sensor_data(sensor_data);
-      xQueuePeek(queue_fans_data, &fans_data, 0);
-      send_fans_data(fans_data);
+      Serial.println("Final - Activacion de send_sensor-data");
+      if (xQueuePeek(queue_fans_data, &fans_data, 0) == pdTRUE) {
+        send_fans_data(fans_data);
+      }
       Serial.println("Datos enviados al servidor");
     }
   }
@@ -220,8 +238,9 @@ void loop() {
 void task_maintain_connection(void *parameter) {
   bool is_connected = false;
   while (true) {
-    if (isWifiConnected() || wireIsConnected()) {
+    if (isWifiConnected() || (hardwareCheck() && wireIsConnected())) {
       if (!is_connected) {
+        Serial.println("Inicio - Activacion de handle_server_com");
         xSemaphoreTake(sem_global_vars, portMAX_DELAY);
         connected = true;
         wire_error = false;
@@ -229,6 +248,7 @@ void task_maintain_connection(void *parameter) {
         if (handle_server_com != NULL)
           vTaskResume(handle_server_com);
         is_connected = true;
+        Serial.println("Final - Activacion de handle_server_com");
       }
     } else {
       xSemaphoreTake(sem_global_vars, portMAX_DELAY);
