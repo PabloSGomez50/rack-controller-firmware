@@ -2,6 +2,8 @@
 #define GLOBAL_VARIABLES_H
 
 #include <Arduino.h>
+#include "freertos/FreeRTOS.h"
+#include "freertos/semphr.h"
 
 //Defino el id del usuario (reemplazar por original)
 #define USER "USER_ID"
@@ -62,7 +64,7 @@ extern float crit_temp;
 //max tmr temp, from the server
 extern float crit_temp_tmr;
 //max hum, from the server
-extern int crit_hum;
+extern float crit_hum;
 //variable to control rele, from the server
 extern bool rele;
 //buzzer alarm state, from the server to

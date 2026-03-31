@@ -20,6 +20,8 @@ void send_sensor_data(sensor_data_t data)
   if (isWifiConnected()) {
     HTTPClient http;
     http.begin(url);
+    http.setConnectTimeout(1200);
+    http.setTimeout(1200);
     http.addHeader("Content-Type", "application/json");
     int httpResponseCode = http.POST(payload);
     Serial.printf("send_sensor_data: POST to %s, code=%d\n", url.c_str(), httpResponseCode);
@@ -43,6 +45,7 @@ void send_sensor_data(sensor_data_t data)
     }
 
     if (ethClient.connect(host.c_str(), port)) {
+      ethClient.setTimeout(250);
       String req = String("POST ") + path + " HTTP/1.1\r\n";
       req += String("Host: ") + host + ":" + port + "\r\n";
       req += "Content-Type: application/json\r\n";
@@ -51,7 +54,11 @@ void send_sensor_data(sensor_data_t data)
       req += payload;
       ethClient.print(req);
 
-      String status = ethClient.readStringUntil('\n');
+      unsigned long t0 = millis();
+      while (!ethClient.available() && (millis() - t0) < 1000) {
+        vTaskDelay(1);
+      }
+      String status = ethClient.available() ? ethClient.readStringUntil('\n') : "";
       int code = -1;
       if (status.length() > 0) {
         int sp1 = status.indexOf(' ');
@@ -87,6 +94,8 @@ void send_fans_data(fans_data_t fans_data)
   if (isWifiConnected()) {
     HTTPClient http;
     http.begin(url);
+    http.setConnectTimeout(1200);
+    http.setTimeout(1200);
     http.addHeader("Content-Type", "application/json");
     int httpResponseCode = http.POST(payload);
     Serial.printf("send_fans_data: POST to %s, code=%d\n", url.c_str(), httpResponseCode);
@@ -109,6 +118,7 @@ void send_fans_data(fans_data_t fans_data)
     }
 
     if (ethClient.connect(host.c_str(), port)) {
+      ethClient.setTimeout(250);
       String req = String("POST ") + path + " HTTP/1.1\r\n";
       req += String("Host: ") + host + ":" + port + "\r\n";
       req += "Content-Type: application/json\r\n";
@@ -117,7 +127,11 @@ void send_fans_data(fans_data_t fans_data)
       req += payload;
       ethClient.print(req);
 
-      String status = ethClient.readStringUntil('\n');
+      unsigned long t0 = millis();
+      while (!ethClient.available() && (millis() - t0) < 1000) {
+        vTaskDelay(1);
+      }
+      String status = ethClient.available() ? ethClient.readStringUntil('\n') : "";
       int code = -1;
       if (status.length() > 0) {
         int sp1 = status.indexOf(' ');
@@ -147,6 +161,8 @@ void load_data_from_server()
   if (isWifiConnected()) {
     HTTPClient httpc;
     httpc.begin(url);
+    httpc.setConnectTimeout(1200);
+    httpc.setTimeout(1200);
     status_code = httpc.GET();
     if (status_code == HTTP_CODE_OK) {
       payload = httpc.getString();
@@ -173,20 +189,36 @@ void load_data_from_server()
     }
 
     if (ethClient.connect(host.c_str(), port)) {
+      ethClient.setTimeout(250);
       String req = String("GET ") + path + " HTTP/1.1\r\n";
       req += String("Host: ") + host + "\r\n";
       req += "Connection: close\r\n\r\n";
       ethClient.print(req);
 
-      String status = ethClient.readStringUntil('\n');
+      unsigned long t0 = millis();
+      while (!ethClient.available() && (millis() - t0) < 1000) {
+        vTaskDelay(1);
+      }
+      String status = ethClient.available() ? ethClient.readStringUntil('\n') : "";
       if (status.indexOf("200") >= 0) {
         // skip headers
-        while (ethClient.connected()) {
+        unsigned long headersDeadline = millis() + 2000;
+        while (ethClient.connected() && millis() < headersDeadline) {
+          if (!ethClient.available()) {
+            vTaskDelay(1);
+            continue;
+          }
           String line = ethClient.readStringUntil('\n');
-          if (line == "\r" || line.length() == 0) break;
+          if (line == "\r" || line.length() == 0)
+            break;
         }
         payload = "";
-        while (ethClient.available()) {
+        unsigned long bodyDeadline = millis() + 3000;
+        while ((ethClient.connected() || ethClient.available()) && millis() < bodyDeadline) {
+          if (!ethClient.available()) {
+            vTaskDelay(1);
+            continue;
+          }
           payload += (char)ethClient.read();
         }
       } else {
@@ -217,33 +249,53 @@ void load_data_from_server()
 
   if (doc.containsKey("max_hum_value"))
   {
-    crit_hum = doc["max_hum_value"].as<int>();
+    crit_hum = doc["max_hum_value"].as<float>();
+    Serial.printf("Config actualizada: crit_hum=%.1f\n", crit_hum);
   }
   if (doc.containsKey("max_temp_value"))
   {
     crit_temp = doc["max_temp_value"].as<float>();
+    Serial.printf("Config actualizada: crit_temp=%.1f\n", crit_temp);
   }
   if (doc.containsKey("max_temp_tmr_value"))
   {
     crit_temp_tmr = doc["max_temp_tmr_value"].as<float>();
+    Serial.printf("Config actualizada: crit_temp_tmr=%.1f\n", crit_temp_tmr);
   }
   if (doc.containsKey("manual_speed"))
   {
     manual_speed = doc["manual_speed"].as<float>();
+    Serial.printf("Config actualizada: manual_speed=%.2f\n", manual_speed);
   }
   if (doc.containsKey("rele"))
   {
     rele = doc["rele"].as<bool>();
+    Serial.printf("Config actualizada: rele=%s\n", rele ? "ON" : "OFF");
   }
   if (doc.containsKey("buzzer"))
   {
     buzzer = doc["buzzer"].as<bool>();
+    Serial.printf("Config actualizada: buzzer=%s\n", buzzer ? "ON" : "OFF");
   }
   if (doc.containsKey("is_automatic_speed"))
   {
     is_automatic_speed = doc["is_automatic_speed"].as<bool>();
+    Serial.printf("Config actualizada: is_automatic_speed=%s\n", is_automatic_speed ? "true" : "false");
   }
 
   if (sem_global_vars != NULL)
     xSemaphoreGive(sem_global_vars);
+}
+
+void debug_print_json(const char* json_str)
+{
+  StaticJsonDocument<256> doc;
+  DeserializationError err = deserializeJson(doc, json_str);
+  if (err) {
+    Serial.print("debug_print_json: JSON parse error: ");
+    Serial.println(err.c_str());
+    return;
+  }
+  serializeJsonPretty(doc, Serial);
+  Serial.println();
 }

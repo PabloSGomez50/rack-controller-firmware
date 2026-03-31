@@ -1,3 +1,4 @@
+#include "global_variables.h"
 
 float temp, temp_tmr, temp_copy, temp_tmr_copy;
 int hum, hum_copy;
