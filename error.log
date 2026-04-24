@@ -1,0 +1,102 @@
+Tengo un proyecto heredado de esp32 en Arduino, en el cual separe tareas utilizando FreeRTOS gracias a esp-idf. El desarrollo lo hice en base a Wifi pero el cliente solicito que funcione con Ethernet y un enc28j60, pero tengo problemas cuando hago requests HTTPS a telegram para poder recibir y enviar mensajes de un bot, asi generar notificaciones del estado del sistema.
+
+Adjunto los archivos involucrados, no el proyecto completo y el error para un mejor diagnostico.
+
+Detalle las posibles razones del error.
+
+Logs funcionamiento en Wifi:
+
+```
+
+16:57:40.297 -> Error en wire_status
+16:57:40.297 -> Intentando conectar por WiFi (fallback)...
+16:57:43.371 -> WiFi conectado, IP: 192.168.10.85
+16:57:43.371 -> telegramInit: allowedChatId='7164870276'
+16:57:43.371 -> Free heap after network init: 207992
+16:57:43.371 -> Inicio de tareas
+16:57:43.371 -> Inicio de task_telegram
+16:57:45.674 -> send_sensor_data: POST to http://192.168.10.104:3000/api/sensor, code=-1
+16:57:46.855 -> send_fans_data: POST to http://192.168.10.104:3000/api/fans, code=-1
+16:57:46.855 -> Datos enviados al servidor
+16:57:48.880 -> Telegram: 0 updates
+16:57:50.092 -> send_sensor_data: POST to http://192.168.10.104:3000/api/sensor, code=-1
+16:57:52.885 -> telegramPollUpdates: HTTP -11
+16:57:52.885 -> Telegram: 0 updates
+16:57:54.047 -> send_fans_data: POST to http://192.168.10.104:3000/api/fans, code=-1
+16:57:54.087 -> Datos enviados al servidor
+16:57:55.534 -> Telegram: 0 updates
+16:57:56.784 -> send_sensor_data: POST to http://192.168.10.104:3000/api/sensor, code=-1
+16:57:59.524 -> telegramPollUpdates: HTTP -11
+16:57:59.524 -> Telegram: 0 updates
+16:58:00.731 -> send_fans_data: POST to http://192.168.10.104:3000/api/fans, code=-1
+16:58:02.506 -> Telegram: 0 updates
+16:58:03.753 -> load_data_from_server: GET failed, code=-1
+16:58:03.753 -> Datos enviados al servidor
+16:58:06.665 -> telegramPollUpdates: HTTP -11
+16:58:06.699 -> Telegram: 0 updates
+16:58:07.875 -> send_sensor_data: POST to http://192.168.10.104:3000/api/sensor, code=-1
+...
+
+17:00:04.450 -> Datos enviados al servidor
+17:00:06.213 -> Telegram: 1 updates
+17:00:06.248 -> Telegram: Procesando update de chat_id: '7164870276' con texto: /status
+17:00:06.248 -> Telegram: Comando recibido: '/status' Args: ''
+17:00:07.445 -> send_sensor_data: POST to http://192.168.10.104:3000/api/sensor, code=-1
+17:00:10.518 -> send_fans_data: POST to http://192.168.10.104:3000/api/fans, code=-1
+17:00:10.518 -> Datos enviados al servidor
+17:00:12.287 -> Telegram: 1 updates
+17:00:12.287 -> Telegram: Procesando update de chat_id: '7164870276' con texto: /help
+17:00:12.287 -> Telegram: Comando recibido: '/help' Args: ''
+17:00:13.498 -> send_sensor_data: POST to http://192.168.10.104:3000/api/sensor, code=-1
+17:00:16.520 -> send_fans_data: POST to http://192.168.10.104:3000/api/fans, code=-1
+17:00:16.565 -> Datos enviados al servidor
+```
+
+
+
+Logs error en Ethernet
+
+```
+16:34:03.624 -> Inicializando Ethernet
+16:34:05.094 -> Initialize Ethernet with DHCP:
+16:34:10.364 ->   IP asignada por DHCP 192.168.10.90
+16:34:12.373 -> telegramInit: allowedChatId='7164870276'
+16:34:12.373 -> Free heap after network init: 260208
+16:34:12.373 -> Inicio de tareas
+16:34:12.373 -> Inicio de task_telegram
+16:34:16.835 -> Telegram: 0 updates
+16:34:18.400 -> send_sensor_data: ethClient.connect failed
+16:34:18.400 -> (SSLClient)(SSL_ERROR)(available): Cannot operate on a closed SSL connection.
+16:34:18.446 -> (SSLClient)(SSL_ERROR)(available): Cannot operate on a closed SSL connection.
+
+```
+
+
+
+Al levantar el servidor para send_sensor_data y send_fans_data obtengo el siguiente comportamiento en Ethernet:
+
+```
+17:14:41.029 -> send_fans_data: ethClient.connect failed
+17:14:42.176 -> load_data_from_server (ethernet): GET status: 
+17:14:42.176 -> Datos enviados al servidor
+17:14:47.183 -> send_sensor_data: ethClient.connect failed
+17:14:52.233 -> send_fans_data: ethClient.connect failed
+17:14:52.233 -> Datos enviados al servidor
+17:14:52.837 -> send_sensor_data (ethernet): POST to http://192.168.10.104:3000/api/sensor, code=200
+17:14:53.122 -> send_fans_data (ethernet): POST to http://192.168.10.104:3000/api/fans, code=200
+17:14:53.197 -> Datos enviados al servidor
+17:14:54.516 -> send_sensor_data (ethernet): POST to http://192.168.10.104:3000/api/sensor, code=200
+17:14:54.864 -> send_fans_data (ethernet): POST to http://192.168.10.104:3000/api/fans, code=200
+17:14:55.191 -> load_data_from_server: JSON parse error: InvalidInput
+17:14:55.191 -> Datos enviados al servidor
+17:14:55.472 -> send_sensor_data (ethernet): POST to http://192.168.10.104:3000/api/sensor, code=200
+17:14:55.736 -> send_fans_data (ethernet): POST to http://192.168.10.104:3000/api/fans, code=200
+17:14:55.780 -> Datos enviados al servidor
+17:14:56.032 -> send_sensor_data (ethernet): POST to http://192.168.10.104:3000/api/sensor, code=200
+17:14:56.390 -> send_fans_data (ethernet): POST to http://192.168.10.104:3000/api/fans, code=200
+17:14:56.436 -> Datos enviados al servidor
+17:14:56.669 -> send_sensor_data (ethernet): POST to http://192.168.10.104:3000/api/sensor, code=200
+17:14:56.981 -> send_fans_data (ethernet): POST to http://192.168.10.104:3000/api/fans, code=200
+17:14:57.292 -> load_data_from_server: JSON parse error: InvalidInput
+17:14:57.292 -> Datos enviados al servidor
+```

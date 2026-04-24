@@ -113,6 +113,8 @@ bool telegramSendMessage(const String &chatId, const String &text, bool markdown
 	const String url = "https://api.telegram.org/bot" + s_botToken + "/sendMessage";
 	if (http.begin(*client, url))
 	{
+		http.setConnectTimeout(1200);
+		http.setTimeout(1500);
 		http.addHeader("Content-Type", "application/x-www-form-urlencoded");
 
 		String body = "chat_id=" + urlEncode(chatId) +
@@ -170,6 +172,8 @@ size_t telegramPollUpdates(telegram_update_t *outUpdates, size_t maxUpdates, uin
 
 	if (http.begin(*client, url))
 	{
+		http.setConnectTimeout(1200);
+		http.setTimeout(1500);
 		const int code = http.GET();
 		if (code == HTTP_CODE_OK)
 		{

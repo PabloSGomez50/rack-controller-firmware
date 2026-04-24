@@ -9,8 +9,8 @@ IPAddress myDns(8, 8, 8, 8);
 
 // WiFi fallback credentials (define in a central header if you prefer)
 #ifndef WIFI_SSID
-#define WIFI_SSID "Telecentro-996b"
-#define WIFI_PASS "ZNYUW3MDZDTM"
+#define WIFI_SSID ""
+#define WIFI_PASS ""
 #endif
 
 #define ETH_CLK_PIN GPIO_NUM_18
@@ -20,8 +20,9 @@ IPAddress myDns(8, 8, 8, 8);
 
 // Inicializo cliente Ethernet
 EthernetClient ethClient;
-// SSL wrapper over Ethernet
-SSLClient sslEthClient(ethClient, TAs, (size_t)TAs_NUM, GPIO_NUM_34);
+// Cliente dedicado para TLS sobre Ethernet (evita compartir socket con HTTP plano)
+static EthernetClient ethTlsClient;
+SSLClient sslEthClient(ethTlsClient, TAs, (size_t)TAs_NUM, GPIO_NUM_34);
 
 // WiFi secure client used for fallback
 WiFiClientSecure wclient;

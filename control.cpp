@@ -90,7 +90,7 @@ uint32_t getFanSpeed(int fan) {
   uint32_t pulses = pulseCounter[fan - 1];
   pulseCounter[fan - 1] = 0; // Reiniciar el contador
   interrupts();
-  return (pulses * 60000) / (FAN_PERIOD * FAN_PULSES);
+  return pulses * (60000 / (FAN_PERIOD * FAN_PULSES));
 }
 
 float getDynamicSpeed(int hum, float temp, float temp_tmr) {

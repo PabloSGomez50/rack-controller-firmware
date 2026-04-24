@@ -9,7 +9,7 @@
 #include "telegram.h"
 
 #ifndef TELEGRAM_BOT_TOKEN
-#define TELEGRAM_BOT_TOKEN "7507194258:AAEeaBbAkaprIwi9e3m0kBtYrEEBwsa88Zs"
+#define TELEGRAM_BOT_TOKEN "7507194258:AAFdjD982tgmD5K9XHtpd24d5Y5sxAWf1d4"
 #endif
 
 #ifndef TELEGRAM_ALLOWED_CHAT_ID
@@ -101,7 +101,7 @@ void setup() {
   xTaskCreatePinnedToCore(
     task_telegram,
     "task_telegram",
-    RTOS_MINIMAL_STACKSIZE * 24,
+    RTOS_MINIMAL_STACKSIZE * 48,
     NULL,
     0,
     &handle_telegram_task,
@@ -284,11 +284,26 @@ void task_server_com(void *parameter) {
 void task_telegram(void *parameter) {
   telegram_update_t updates[3];
   sensor_data_t status_snapshot = {0};
+  uint16_t diag_counter = 0;
+  bool warned_no_wifi = false;
   Serial.println("Inicio de task_telegram");
+  vTaskDelay(3000 / portTICK_PERIOD_MS);
   while (true) {
-    xSemaphoreTake(sem_network, portMAX_DELAY);
-    size_t nupd = telegramPollUpdates(updates, 3, 0);
-    xSemaphoreGive(sem_network);
+    if (!isWifiConnected()) {
+      if (!warned_no_wifi) {
+        Serial.println("Telegram deshabilitado en Ethernet (TLS sobre ENC28J60 inestable)");
+        warned_no_wifi = true;
+      }
+      vTaskDelay(5000 / portTICK_PERIOD_MS);
+      continue;
+    }
+    warned_no_wifi = false;
+
+    size_t nupd = 0;
+    if (xSemaphoreTake(sem_network, 1500 / portTICK_PERIOD_MS) == pdTRUE) {
+      nupd = telegramPollUpdates(updates, 3, 0);
+      xSemaphoreGive(sem_network);
+    }
     Serial.println("Telegram: " + String(nupd) + " updates");
 
     for (size_t i = 0; i < nupd; i++) {
@@ -399,6 +414,12 @@ void task_telegram(void *parameter) {
                             "/status\n/auto\n/fans <0..1>\n/rele on|off\n/buzzer on|off");
         xSemaphoreGive(sem_network);
       }
+    }
+
+    diag_counter++;
+    if (diag_counter >= 30) {
+      diag_counter = 0;
+      Serial.printf("Telegram stack watermark: %u bytes\n", (unsigned int)uxTaskGetStackHighWaterMark(NULL));
     }
 
     vTaskDelay(1000 / portTICK_PERIOD_MS);
